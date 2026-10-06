@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+backend/src/generated
+backend/prisma/migrations
+package-lock.json
+CLAUDE.md

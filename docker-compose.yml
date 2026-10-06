@@ -1,0 +1,49 @@
+# Local development services only — this is NOT deployment configuration.
+# Host ports can be overridden from a root .env file (see docs/installation.md),
+# e.g. POSTGRES_PORT=5434 if 5432 is already taken by another project.
+name: pulsecheck
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: pulse
+      POSTGRES_PASSWORD: pulse
+      POSTGRES_DB: pulsecheck
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - pulsecheck-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pulse -d pulsecheck']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres-test:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: pulse
+      POSTGRES_PASSWORD: pulse
+      POSTGRES_DB: pulsecheck_test
+    ports:
+      - '${POSTGRES_TEST_PORT:-5433}:5432'
+    # Test data is throwaway: keep it in memory for speed.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pulse -d pulsecheck_test']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - '${MAILPIT_SMTP_PORT:-1025}:1025' # SMTP
+      - '${MAILPIT_UI_PORT:-8025}:8025' # Web inbox
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
+volumes:
+  pulsecheck-pgdata:

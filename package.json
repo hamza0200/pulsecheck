@@ -1,0 +1,43 @@
+{
+  "name": "pulsecheck",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PulseCheck — a multi-user uptime monitor (Node.js + React)",
+  "type": "module",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c cyan,magenta \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "test": "npm run test -w backend && npm run test -w frontend",
+    "test:backend": "npm run test -w backend",
+    "test:frontend": "npm run test -w frontend",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npm run typecheck -w backend && npm run typecheck -w frontend",
+    "db:generate": "npm run db:generate -w backend",
+    "db:migrate": "npm run db:migrate -w backend",
+    "db:migrate:test": "npm run db:migrate:test -w backend",
+    "db:seed": "npm run db:seed -w backend",
+    "db:studio": "npm run db:studio -w backend",
+    "admin:create": "npm run admin:create -w backend --"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "concurrently": "^10.0.5",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.0",
+    "eslint-plugin-react-hooks": "^7.0.0",
+    "globals": "^16.0.0",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.1"
+  }
+}
