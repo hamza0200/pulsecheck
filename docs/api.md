@@ -381,3 +381,41 @@ Most recent incidents first. `limit` 1–100, default 20.
 ```
 
 `resolvedAt: null` means the incident is still open (the site is down).
+
+### `POST /api/monitors/:id/check-now`
+
+Runs one check immediately, outside the schedule (works on paused monitors too). It goes
+through the same pipeline as scheduled checks: SSRF guard, retry, state machine, incidents,
+events. Rate limit: once per minute per user and monitor.
+
+```json
+200 {
+  "check": {
+    "checkedAt": "2026-10-06T12:49:42.167Z",
+    "isUp": false,
+    "statusCode": null,
+    "responseTimeMs": null,
+    "error": "CERT_HAS_EXPIRED: certificate has expired"
+  },
+  "monitor": { "...": "same as GET /api/monitors/:id" }
+}
+```
+
+| Status | Code                                                            |
+| ------ | --------------------------------------------------------------- |
+| 404    | `MONITOR_NOT_FOUND`                                             |
+| 409    | `CHECK_IN_PROGRESS`: the scheduler is checking this monitor now |
+| 429    | `RATE_LIMITED`                                                  |
+
+#### How a check is judged
+
+- `GET` with `User-Agent: PulseCheck/1.0 (local uptime monitor)` and the monitor's timeout
+  for the whole attempt.
+- Redirects are followed manually, up to 5 hops, and each hop passes the SSRF guard.
+- At most the first 64 KB of the body is read, then the stream is cancelled.
+- A final 2xx or 3xx response is **up**. 4xx/5xx, timeouts, DNS and TLS errors are **down**.
+- Timeouts and network errors are retried once (exponential backoff with jitter) before being
+  recorded. HTTP error statuses are not retried.
+- Typical `error` values: `HTTP 503`, `Timed out after 10000 ms`, `ENOTFOUND: …`,
+  `ECONNREFUSED: …`, `CERT_HAS_EXPIRED: certificate has expired`,
+  `Blocked redirect to http://10.0.0.1/: …`, `Too many redirects (more than 5)`.

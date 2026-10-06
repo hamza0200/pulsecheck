@@ -4,12 +4,16 @@ import { env } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { mailer } from './lib/mailer.js';
 import { prisma } from './lib/prisma.js';
+import { waitForCurrentRun } from './modules/checks/runner.js';
+import { startScheduler, stopScheduler } from './modules/checks/scheduler.js';
 
 const app = createApp();
 const server = createServer(app);
 
 server.listen(env.PORT, () => {
   logger.info(`PulseCheck API listening on http://localhost:${env.PORT}`);
+  if (env.SCHEDULER_ENABLED) startScheduler();
+  else logger.info('Check scheduler disabled (SCHEDULER_ENABLED=false)');
 });
 
 let shuttingDown = false;
@@ -28,9 +32,12 @@ async function shutdown(signal: string) {
   }, 15_000);
   forceExit.unref();
 
+  stopScheduler();
   // Stop accepting new connections; resolves when in-flight requests finish.
   await new Promise<void>((resolve) => server.close(() => resolve()));
   server.closeIdleConnections();
+  // Let a check run in progress finish its writes (capped), so no check is half-recorded.
+  await waitForCurrentRun(10_000);
   mailer.close();
   await prisma.$disconnect();
 

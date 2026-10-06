@@ -43,13 +43,109 @@ server?_ **A:** `hashSync` blocks the event loop for the whole hash (~250ms at c
 every other request waits. `hash` hands the work to the libuv thread pool and resolves a
 promise, so the loop keeps serving requests. Use the async one on servers.
 
+## 2. Async/await, `Promise.all` vs `Promise.allSettled`
+
+**What:** `await` pauses an async function without blocking the thread; other work runs
+meanwhile. `Promise.all` rejects as soon as any promise rejects (fail fast) and resolves
+with every value. `Promise.allSettled` waits for all of them and reports each outcome as
+`{status: 'fulfilled', value}` or `{status: 'rejected', reason}`.
+
+**Where:** `monitorsService.list` and `.get` (`backend/src/modules/monitors/monitors.service.ts`)
+use `Promise.all` for independent queries, where any failure should fail the request.
+`runWithLimit` (`backend/src/lib/concurrency.ts`) returns allSettled-style results, so in
+`runner.ts` → `executeRun` one crashed check is logged and counted while the rest finish.
+
+**Interview Q:** _When would you pick `allSettled` over `all`?_ **A:** When the tasks are
+independent and partial success is useful: checking 500 websites, sending a batch of
+notifications. With `all`, one rejection rejects the combined promise immediately, though
+the other promises keep running unobserved and their results are lost.
+
+## 3. Concurrency limiting (`runWithLimit`), and why `next++` needs no lock
+
+**What:** start N "workers" that each pull the next task index from a shared counter until
+none remain. At most N tasks are in flight at once, and results are stored by index to
+preserve order.
+
+**Where:** `backend/src/lib/concurrency.ts` (`runWithLimit`), used with a limit of 5 in
+`backend/src/modules/checks/runner.ts` (`executeRun`).
+
+**Interview Q:** _Two workers share `next` and both do `const i = next++`. Isn't that a race
+condition?_ **A:** Not in Node. JavaScript runs on one thread, and a function only gives up
+control at an `await`. `next++` is synchronous, so no other worker can run between reading
+and incrementing it. Races in Node happen across `await` points, for example
+read-from-DB → await → write-to-DB. That's why the monitor update uses a row lock.
+
+## 4. Timeouts and cancellation (`AbortSignal.timeout`, `AbortController`)
+
+**What:** an `AbortSignal` is a cancellation token that fetch, streams, timers and many Node
+APIs accept. `AbortSignal.timeout(ms)` creates one that aborts itself after `ms`, so you
+don't need to clear any timers. `AbortController` lets you abort manually. Aborting rejects
+the pending operation and releases its socket.
+
+**Where:** `backend/src/modules/checks/checker.ts` → `attemptCheck`: one
+`AbortSignal.timeout(timeoutMs)` covers every redirect hop. Timeout errors are recognised by
+`err.name === 'TimeoutError'` in `describeFetchError`. The TLS check uses
+`socket.setTimeout` + `destroy` (`backend/src/modules/checks/ssl.ts`).
+
+**Interview Q:** _Doesn't `Promise.race([fetch(url), timeout(5000)])` do the same?_ **A:** No.
+The race stops you waiting, but the request keeps running in the background and holds a
+socket until it finishes. An `AbortSignal` actually cancels the request.
+
+## 5. Retries with exponential backoff and jitter
+
+**What:** retry transient failures a bounded number of times, waiting longer each time
+(base × 2^attempt) with randomness ("jitter") so many clients don't retry in lockstep.
+Only retry errors that might succeed next time.
+
+**Where:** `backend/src/lib/retry.ts` (`retry`, `backoffDelay`, full-jitter strategy).
+`performCheck` in `checker.ts` retries once, only for `TransientCheckError` (timeouts,
+network errors). HTTP 500 and SSRF blocks are never retried.
+
+**Interview Q:** _Why add jitter?_ **A:** If a server blips and 1,000 clients fail at the
+same moment, fixed backoff makes all 1,000 retry at the same moment again: a thundering herd
+that can knock the server over as it recovers. Random delays spread the retries out.
+
+## 6. Timers: `setInterval`, `.unref()`, cleanup on shutdown
+
+**What:** timers are event-loop callbacks. An active timer keeps the process alive.
+`.unref()` says "don't keep the process alive just for me". `clearInterval` stops one.
+`node:timers/promises` provides an awaitable `setTimeout`.
+
+**Where:** `backend/src/modules/checks/scheduler.ts` (`startScheduler`, `stopScheduler`:
+startup `setTimeout` + 60-second `setInterval`, both unref'd). `waitForCurrentRun` in
+`runner.ts` races the run against an unref'd awaitable timer. `server.ts` stops the scheduler
+first on `SIGTERM`/`SIGINT`.
+
+**Interview Q:** _What's `unref()` for, and why use it on the scheduler?_ **A:** Without it,
+the interval alone would keep Node running forever after the HTTP server closes, so shutdown
+would hang until something force-killed the process. With `unref()`, the process exits
+naturally once real work is done.
+
+## 7. `EventEmitter`: typed events, listener cleanup, `setMaxListeners`
+
+**What:** `EventEmitter` is Node's built-in publish/subscribe mechanism. `emit` calls
+listeners synchronously, in registration order. `@types/node` lets you type the event map
+(`new EventEmitter<AppEvents>()`), so event names and payloads are checked. An `'error'`
+event with no listener throws and crashes the process.
+
+**Where:** `backend/src/lib/events.ts` (`events`, `AppEvents`). The runner
+(`modules/checks/runner.ts` → `checkMonitor`) only calls `events.emit(...)`. Listeners
+(alerts, SSE) are added in milestone 6.
+
+**Interview Q:** _Why an event bus instead of calling `sendEmail()` from the runner?_ **A:**
+Decoupling. The runner shouldn't know who cares about a state change. Adding SSE, Slack or
+webhooks means adding a listener, not editing and re-testing the runner. And a failure in
+one listener is contained instead of breaking the check pipeline.
+
 ## 9. Networking: `node:dns`, `node:net` IP checks, `node:tls`
 
 **What:** `dns.lookup` resolves a hostname through the operating system's resolver, the same
 path the HTTP client uses. `{ all: true }` returns every A/AAAA record. `net.isIP` tells IPv4
 from IPv6, and `net.BlockList` matches addresses against CIDR ranges natively.
 
-**Where:** `backend/src/lib/ssrf-guard.ts`: `isPrivateAddress` (BlockList with private,
+**Where:** `backend/src/modules/checks/ssl.ts` → `getCertificateExpiry` uses
+`tls.connect({ host: <vetted IP>, port: 443, servername })` and reads
+`getPeerCertificate().valid_to`. `backend/src/lib/ssrf-guard.ts`: `isPrivateAddress` (BlockList with private,
 loopback, link-local and reserved ranges, unwrapping `::ffff:a.b.c.d`) and `assertPublicUrl`
 (protocol/port rules plus `dns.lookup` of all addresses).
 
@@ -239,4 +335,4 @@ compile time.
 
 ---
 
-_Sections 2–8, 18, 20 and 21 are added as those features are built._
+_Sections 8, 18, 20 and 21 are added as those features are built._

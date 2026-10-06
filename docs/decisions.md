@@ -103,3 +103,50 @@ Short records: what we chose, what else we considered, why, and what would chang
 - **Why:** the lock makes concurrent creates by the same user run one after another, and
   doesn't affect other users. A test fires three creates at once with 19 existing monitors
   and expects exactly one to succeed.
+
+## In-process scheduler instead of cron or a job queue (BullMQ)
+
+- **Decision:** `scheduler.ts` calls `runChecks()` every 60 seconds with an `unref()`'d
+  `setInterval` inside the API process. The runner works out which monitors are due from
+  `last_checked_at` and each monitor's interval.
+- **Alternatives:** system cron or a platform cron hitting a protected endpoint (Laravel's
+  `schedule:run` model); a Redis-backed queue such as BullMQ with repeatable jobs and
+  separate worker processes; Postgres-backed queues (pg-boss, graphile-worker).
+- **Why:** zero extra infrastructure for a local app, and it demonstrates timers,
+  `unref()` and graceful shutdown. Because "due" is computed from the database, a restart
+  never loses schedule state: overdue monitors are simply picked up on the next tick.
+- **At scale:** move checks to dedicated workers fed by a queue (BullMQ or pg-boss). That
+  gives retries per job, horizontal scaling and isolation from API latency. See
+  [deployment.md](./deployment.md) for why free hosting tiers that sleep also break an
+  in-process scheduler.
+
+## Down after 2 consecutive failures, up after 1 success
+
+- **Decision:** a monitor becomes `DOWN` (opens an incident and emails the owner) only on
+  its 2nd consecutive failed check. A single success marks it `UP` and resolves the incident.
+  Implemented as the pure function `nextState` in `modules/checks/state-machine.ts`.
+- **Alternatives:** down on the first failure (fastest, noisiest); N-of-M sliding window;
+  confirmation from a second region before alerting.
+- **Why:** a single failure is often a blip (a dropped packet, a deploy restart, a
+  transient 502). Each check already retries network errors once, so 2 failed checks mean
+  at least 3 failed requests spread over one interval: a strong signal. Recovery needs no
+  confirmation, because a 2xx proves the site answered.
+- **At scale:** multi-region confirmation is the standard next step, so one region's
+  network trouble doesn't page anyone.
+
+## Overlap guard now, advisory lock for multiple instances
+
+- **Decision:** `runChecks()` keeps the in-flight run in a module variable. A trigger
+  arriving while a run is still going returns `null` immediately. A per-monitor in-flight
+  set also stops "check now" from racing the scheduler on the same monitor, and the state
+  update takes a `FOR UPDATE` lock on the monitor row.
+- **Alternatives:** let runs overlap (double checks and double alerts); queue the trigger
+  to run after the current one (needless: the next tick picks up anything still due).
+- **Why:** a slow site or a large backlog can make a run take longer than the 60-second
+  tick.
+- **At scale:** a module variable only protects one process. With several API instances,
+  each would run the scheduler. Wrap the run in a Postgres advisory lock
+  (`SELECT pg_try_advisory_lock(<key>)`, skipping the run if it returns false). Or claim work
+  per monitor with `UPDATE … SET last_checked_at = now() WHERE … RETURNING` combined with
+  `FOR UPDATE SKIP LOCKED`, which also lets instances share the load instead of electing one
+  leader.

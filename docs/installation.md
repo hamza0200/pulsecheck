@@ -129,6 +129,10 @@ detail page to see the status code and error for each check. Also check your own
 corporate VPNs and DNS filters can block or redirect requests. A site is only marked down
 after two consecutive failed checks.
 
+An error like `CERT_HAS_EXPIRED` or `UNABLE_TO_VERIFY_LEAF_SIGNATURE` means the site's HTTPS
+certificate really is broken. Browsers would show a warning too, so PulseCheck counts it as
+down. The **SSL** column shows the expiry date.
+
 **A private or local URL is refused.** That's the SSRF guard (see
 [node-concepts.md](./node-concepts.md)). For local testing only, set
 `ALLOW_PRIVATE_TARGETS=true` in `backend/.env`.

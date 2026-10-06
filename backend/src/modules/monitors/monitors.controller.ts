@@ -54,3 +54,7 @@ export const listIncidents: RequestHandler<
     await monitorsService.listIncidents(currentUser(req).id, req.params.id, req.query.limit),
   );
 };
+
+export const checkNow: RequestHandler<MonitorIdParams> = async (req, res) => {
+  res.json(await monitorsService.checkNow(currentUser(req).id, req.params.id));
+};

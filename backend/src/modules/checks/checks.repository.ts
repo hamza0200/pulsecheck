@@ -39,3 +39,53 @@ export const checksRepository = {
     });
   },
 };
+
+export interface DueMonitor {
+  id: string;
+  userId: string;
+  name: string;
+  url: string;
+  timeoutMs: number;
+  sslCheckedAt: Date | null;
+}
+
+/** The scheduler ticks every 60s; this slack keeps a 10-minute monitor from slipping to 11. */
+const DUE_SLACK_SECONDS = 30;
+
+export const dueMonitorsRepository = {
+  /**
+   * Monitors that are not paused, whose owner is not disabled, and that were never
+   * checked or were last checked at least `interval_minutes` ago. Least recently checked
+   * first, so nothing starves.
+   */
+  findDue(): Promise<DueMonitor[]> {
+    return prisma.$queryRaw<DueMonitor[]>`
+      SELECT m.id, m.user_id AS "userId", m.name, m.url, m.timeout_ms AS "timeoutMs",
+             m.ssl_checked_at AS "sslCheckedAt"
+      FROM monitors m
+      JOIN users u ON u.id = m.user_id
+      WHERE NOT m.is_paused
+        AND NOT u.is_disabled
+        AND (
+          m.last_checked_at IS NULL
+          OR m.last_checked_at <= now()
+               - make_interval(mins => m.interval_minutes)
+               + make_interval(secs => ${DUE_SLACK_SECONDS})
+        )
+      ORDER BY m.last_checked_at ASC NULLS FIRST`;
+  },
+
+  findOne(id: string): Promise<DueMonitor | null> {
+    return prisma.monitor.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        userId: true,
+        name: true,
+        url: true,
+        timeoutMs: true,
+        sslCheckedAt: true,
+      },
+    });
+  },
+};

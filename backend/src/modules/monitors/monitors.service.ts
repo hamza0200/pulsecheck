@@ -4,6 +4,7 @@ import { AppError, badRequest, conflict, notFound } from '../../lib/errors.js';
 import { prisma } from '../../lib/prisma.js';
 import { SsrfError, assertPublicUrl } from '../../lib/ssrf-guard.js';
 import { checksRepository } from '../checks/checks.repository.js';
+import { checkMonitorById, isMonitorInFlight } from '../checks/runner.js';
 import { incidentsRepository } from '../incidents/incidents.repository.js';
 import { incidentsService } from '../incidents/incidents.service.js';
 import { type MonitorDto, monitorRepository } from './monitors.repository.js';
@@ -160,6 +161,27 @@ export const monitorsService = {
     const checks = hasMore ? rows.slice(0, query.limit) : rows;
     const last = checks.at(-1);
     return { checks, nextCursor: hasMore && last ? encodeCursor(last) : null };
+  },
+
+  /** Runs one check right now, outside the schedule (even if the monitor is paused). */
+  async checkNow(userId: string, id: string) {
+    await requireOwned(userId, id);
+    const inProgress = () =>
+      conflict('CHECK_IN_PROGRESS', 'This monitor is being checked right now, try again shortly');
+    if (isMonitorInFlight(id)) throw inProgress();
+    const outcome = await checkMonitorById(id);
+    if (!outcome) throw inProgress();
+    const { result, checkedAt } = outcome;
+    return {
+      check: {
+        checkedAt,
+        isUp: result.isUp,
+        statusCode: result.statusCode,
+        responseTimeMs: result.responseTimeMs,
+        error: result.error,
+      },
+      monitor: await monitorsService.get(userId, id),
+    };
   },
 
   async listIncidents(userId: string, id: string, limit: number) {
