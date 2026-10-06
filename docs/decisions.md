@@ -190,3 +190,21 @@ Short records: what we chose, what else we considered, why, and what would chang
   log line is harmless. It costs one extra request per connection.
 - **At scale:** tickets in a process-local `Map` only work with one instance (or sticky
   sessions). Move them to Redis with a 60-second TTL and use `GETDEL` to consume them.
+
+## Access token in memory, not localStorage
+
+- **Decision:** the frontend keeps the 15-minute access token in a module variable
+  (`frontend/src/api/client.ts`). The 7-day refresh token is an `httpOnly` cookie that
+  JavaScript can't read. On page load the app calls `/api/auth/refresh` to get a new access
+  token.
+- **Alternatives:** `localStorage` or `sessionStorage` (survive reloads, readable by any
+  script on the page); both tokens in cookies (needs CSRF protection on every mutating
+  route); a server session cookie only.
+- **Why:** any XSS bug can read `localStorage` and send a long-lived token to an attacker,
+  who can then use it from anywhere. A token in memory dies with the tab, and the refresh
+  cookie can't be read by script at all. XSS is still serious, since the attacker can make
+  requests while the tab is open, but it can't take the credentials away. `SameSite=Lax`
+  plus `Path=/api/auth` keeps the cookie off cross-site POSTs and every other route.
+- **Cost:** one extra `/refresh` request on every page load, and concurrent 401s must
+  share one refresh call (rotation would otherwise treat the second refresh as token reuse).
+  The API client does this with a single in-flight promise.

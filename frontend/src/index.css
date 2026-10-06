@@ -1,1 +1,68 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/schibsted-grotesk';
+
+/* Design tokens: chart paper, spruce ink, vital signs. */
+@theme {
+  --font-sans: 'Schibsted Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --color-paper: #f3f6f4; /* page ground: cool, faintly green chart paper */
+  --color-grid: #dce5df; /* chart gridlines, hairlines, borders */
+  --color-surface: #ffffff; /* raised panels and inputs */
+  --color-ink: #1c2b25; /* text and primary actions: deep spruce */
+  --color-muted: #56645e; /* secondary text, 5.6:1 on paper */
+  --color-up: #1f8a5b; /* site is up */
+  --color-up-soft: #e3f2ea;
+  --color-down: #c2362f; /* site is down, errors */
+  --color-down-soft: #fbe9e7;
+  --color-unknown: #7d8a84; /* not checked yet, paused */
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    background: var(--color-paper);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+@layer components {
+  /* Chart paper: a fine 8px grid with a stronger line every 5 squares. */
+  .chart-paper {
+    background-color: var(--color-paper);
+    background-image:
+      linear-gradient(to right, rgb(220 229 223 / 0.9) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(220 229 223 / 0.9) 1px, transparent 1px),
+      linear-gradient(to right, rgb(220 229 223 / 0.35) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(220 229 223 / 0.35) 1px, transparent 1px);
+    background-size:
+      40px 40px,
+      40px 40px,
+      8px 8px,
+      8px 8px;
+  }
+}
+
+/* The one orchestrated moment: the pulse line sweeps in once on the auth screens, like a
+   trace appearing on a monitor. A clip-path reveal works at any width (the SVG stretches). */
+@keyframes trace-sweep {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.pulse-trace {
+  animation: trace-sweep 1.6s cubic-bezier(0.65, 0, 0.35, 1) 0.15s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse-trace {
+    animation: none;
+  }
+}
