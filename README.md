@@ -70,7 +70,6 @@ shows their status live, and emails you when one goes down or comes back up.
 | [ESLint](https://eslint.org) + [Prettier](https://prettier.io) | Linting and formatting                                                                                      |
 | npm workspaces                                                 | One repository, separate `backend` and `frontend` packages                                                  |
 | [Docker Compose](https://docs.docker.com/compose/)             | Local PostgreSQL (development and test) and [Mailpit](https://mailpit.axllent.org) (catches emails locally) |
-| [GitHub Actions](https://github.com/features/actions)          | CI: lint, format check, type-check and all tests on pushes to `main` and pull requests                      |
 
 ## Getting started
 

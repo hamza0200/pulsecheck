@@ -117,7 +117,6 @@ pulsecheck/
 ├── package.json              # workspaces: ["frontend", "backend"]
 ├── .nvmrc
 ├── docker-compose.yml        # postgres, postgres-test, mailpit (dev only)
-├── .github/workflows/ci.yml  # lint, type-check, tests (CI only, not deployment)
 ├── README.md
 ├── docs/
 │   ├── installation.md
@@ -469,7 +468,6 @@ Each must appear in the code and be explained in `docs/node-concepts.md`:
 - TypeScript strict, no `any` (use `unknown` and narrow).
 - No secrets in Git; `.env` ignored, `.env.example` committed.
 - Small, focused commits per milestone.
-- CI (`ci.yml`) runs lint, type-check, backend tests (Postgres service container) and frontend tests. This is CI only, not deployment.
 - One failing monitor never crashes a run; alert or SSE errors never crash the process.
 
 ---
@@ -527,6 +525,6 @@ Then:
 - A new user can sign up, add their own URLs, and see only their own dashboard.
 - Forgot password works end to end, with the email visible in Mailpit at `http://localhost:8025`.
 - Down/recovery alerts appear in Mailpit for the monitor's owner.
-- All tests and CI pass; README and every `docs/` file are accurate.
+- All tests pass; README and every `docs/` file are accurate.
 - No deployment configuration exists in the repo; `docs/deployment.md` explains deployment.
 - At the end, print a short summary: what was built, how to run it, and the 5 Node.js concepts most worth rehearsing for an interview, with the file where each lives.
