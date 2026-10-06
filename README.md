@@ -5,6 +5,8 @@ shows their status live, and emails you when one goes down or comes back up.
 
 ![PulseCheck dashboard: monitors with status, a strip of the last 30 checks, response time, uptime and SSL expiry](docs/screenshot.png)
 
+![PulseCheck dashboard detail: monitors with status, response time, uptime and SSL expiry](docs/screenshot2.png)
+
 ## What it does
 
 **For everyone**
