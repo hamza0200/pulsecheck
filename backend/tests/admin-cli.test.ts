@@ -1,7 +1,9 @@
 /**
  * admin:create CLI, run as a real child process in non-interactive mode (test DB).
  * - Creates a new ADMIN with a bcrypt-hashed password and never prints the password
- * - Promotes an existing user, keeping their password when none is piped in
+ * - Creating the FIRST admin also attaches the 10 sample monitors; later admins get none;
+ *   --no-seed skips them
+ * - Promotes an existing user, keeping their password when none is piped in (no samples added)
  * - Rejects a weak password using the same rules as signup
  */
 import { execFile } from 'node:child_process';
@@ -42,6 +44,28 @@ describe('admin:create CLI (non-interactive)', () => {
     expect(await verifyPassword('a-very-long-password', user.passwordHash)).toBe(true);
   });
 
+  it('adds the sample monitors when it creates the first admin, and only then', async () => {
+    const first = await runCli(['--email', 'first@example.com'], 'a-very-long-password\n');
+    expect(first.code).toBe(0);
+    expect(first.stdout).toContain('Added 10 sample monitors');
+    const admin = await prisma.user.findUniqueOrThrow({ where: { email: 'first@example.com' } });
+    expect(await prisma.monitor.count({ where: { userId: admin.id } })).toBe(10);
+
+    const second = await runCli(['--email', 'second@example.com'], 'a-very-long-password\n');
+    expect(second.code).toBe(0);
+    expect(second.stdout).not.toContain('sample monitors');
+    expect(await prisma.monitor.count()).toBe(10);
+  });
+
+  it('skips the sample monitors with --no-seed', async () => {
+    const result = await runCli(
+      ['--email', 'a@example.com', '--no-seed'],
+      'a-very-long-password\n',
+    );
+    expect(result.code).toBe(0);
+    expect(await prisma.monitor.count()).toBe(0);
+  });
+
   it('promotes an existing user and keeps their password when none is piped', async () => {
     await prisma.user.create({
       data: { email: 'existing@example.com', passwordHash: 'unchanged-hash' },
@@ -51,6 +75,8 @@ describe('admin:create CLI (non-interactive)', () => {
     const user = await prisma.user.findUniqueOrThrow({ where: { email: 'existing@example.com' } });
     expect(user.role).toBe('ADMIN');
     expect(user.passwordHash).toBe('unchanged-hash');
+    expect(await prisma.monitor.count()).toBe(0); // promotion never adds samples
+    expect(result.stdout).toContain('npm run db:seed');
   });
 
   it('rejects a weak password with the same rules as signup', async () => {

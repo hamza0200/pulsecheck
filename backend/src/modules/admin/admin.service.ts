@@ -5,7 +5,7 @@ import { prisma } from '../../lib/prisma.js';
 import { refreshTokenRepository } from '../auth/auth.repository.js';
 import { getLastRunSummary } from '../checks/runner.js';
 import { adminRepository, toAdminUser } from './admin.repository.js';
-import type { ListUsersQuery, UpdateUserInput } from './admin.schemas.js';
+import type { ListAdminMonitorsQuery, ListUsersQuery, UpdateUserInput } from './admin.schemas.js';
 
 function encodeCursor(row: { createdAt: Date; id: string }): string {
   return Buffer.from(`${row.createdAt.toISOString()}|${row.id}`).toString('base64url');
@@ -45,6 +45,24 @@ export const adminService = {
     const last = page.at(-1);
     return {
       users: page.map(toAdminUser),
+      nextCursor: hasMore && last ? encodeCursor(last) : null,
+    };
+  },
+
+  /** Read-only view of every user's monitors (URL, status, owner). */
+  async listMonitors(query: ListAdminMonitorsQuery) {
+    const rows = await adminRepository.listMonitors({
+      limit: query.limit,
+      search: query.search || undefined,
+      userId: query.userId,
+      status: query.status,
+      after: query.cursor ? decodeCursor(query.cursor) : undefined,
+    });
+    const hasMore = rows.length > query.limit;
+    const page = hasMore ? rows.slice(0, query.limit) : rows;
+    const last = page.at(-1);
+    return {
+      monitors: page.map(({ user, ...monitor }) => ({ ...monitor, owner: user })),
       nextCursor: hasMore && last ? encodeCursor(last) : null,
     };
   },

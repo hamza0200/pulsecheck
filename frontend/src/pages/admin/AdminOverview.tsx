@@ -1,4 +1,3 @@
-import { Link } from 'react-router';
 import { useAdminStats } from '../../api/admin';
 import { ErrorState, Spinner } from '../../components/PageState';
 import { Stat, StatRow } from '../../components/Stats';
@@ -17,17 +16,7 @@ export function AdminOverview() {
   const { users, monitors, lastRun } = data;
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-[2rem] leading-tight font-semibold tracking-tight">System overview</h1>
-        <Link
-          to="/admin/users"
-          className="inline-flex items-center rounded-md border border-grid bg-surface px-4 py-2 text-sm font-semibold hover:border-muted"
-        >
-          Manage users
-        </Link>
-      </div>
-
-      <h2 className="mt-8 text-lg font-semibold">Accounts and monitors</h2>
+      <h2 className="text-lg font-semibold">Accounts and monitors</h2>
       <div className="mt-3">
         <StatRow>
           <Stat

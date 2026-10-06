@@ -9,6 +9,8 @@
  * - PATCH re-enables a user so they can log in again
  * - An admin cannot disable themselves; unknown ids return 404; unknown fields are rejected
  * - Disabling a user emits user.disabled (closes their live-update streams)
+ * - GET /monitors: every user's monitors with URL, status and owner email (no secrets);
+ *   search by URL/name/owner email, filter by user and status, cursor pagination
  */
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -33,6 +35,7 @@ describe('access control', () => {
   const endpoints = [
     { method: 'get', path: '/api/admin/stats' },
     { method: 'get', path: '/api/admin/users' },
+    { method: 'get', path: '/api/admin/monitors' },
     { method: 'patch', path: '/api/admin/users/00000000-0000-4000-8000-000000000000' },
   ] as const;
 
@@ -197,5 +200,67 @@ describe('PATCH /api/admin/users/:id', () => {
       .set(as(admin))
       .send({ isDisabled: false, role: 'ADMIN' });
     expect(extra.status).toBe(400);
+  });
+});
+
+describe('GET /api/admin/monitors', () => {
+  async function seedMonitors() {
+    const other = await signupUser(app, 'other@example.com');
+    const make = (userId: string, url: string, data: Record<string, unknown> = {}) =>
+      prisma.monitor.create({ data: { userId, name: new URL(url).hostname, url, ...data } });
+    await make(user.user.id, 'https://alpha.example', { currentStatus: 'UP' });
+    await make(user.user.id, 'https://beta.example', { currentStatus: 'DOWN' });
+    await make(other.user.id, 'https://gamma.example', { isPaused: true });
+    await make(admin.user.id, 'https://admins-own.example');
+    return other;
+  }
+
+  it("lists every user's monitors with the owner's email and nothing secret", async () => {
+    await seedMonitors();
+    const res = await request(app).get('/api/admin/monitors').set(as(admin));
+    expect(res.status).toBe(200);
+    expect(res.body.monitors).toHaveLength(4);
+    const beta = res.body.monitors.find((m: { url: string }) => m.url === 'https://beta.example');
+    expect(beta).toMatchObject({
+      name: 'beta.example',
+      currentStatus: 'DOWN',
+      isPaused: false,
+      owner: { id: user.user.id, email: 'user@example.com', isDisabled: false },
+    });
+    expect(JSON.stringify(res.body)).not.toMatch(/passwordHash|tokenHash|\$2[aby]\$/);
+    expect(res.body.nextCursor).toBeNull();
+  });
+
+  it('searches URL, name and owner email, and filters by user and status', async () => {
+    const other = await seedMonitors();
+    const get = (query: Record<string, string>) =>
+      request(app).get('/api/admin/monitors').query(query).set(as(admin));
+    const urls = (res: request.Response) =>
+      res.body.monitors.map((m: { url: string }) => m.url).sort();
+
+    expect(urls(await get({ search: 'GAMMA' }))).toEqual(['https://gamma.example']);
+    expect(urls(await get({ search: 'user@example' }))).toEqual([
+      'https://alpha.example',
+      'https://beta.example',
+    ]);
+    expect(urls(await get({ userId: other.user.id }))).toEqual(['https://gamma.example']);
+    expect(urls(await get({ status: 'DOWN' }))).toEqual(['https://beta.example']);
+    expect(urls(await get({ status: 'PAUSED' }))).toEqual(['https://gamma.example']);
+    expect((await get({ userId: 'not-a-uuid' })).status).toBe(400);
+  });
+
+  it('paginates with a cursor', async () => {
+    await seedMonitors();
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: request.Response = await request(app)
+        .get('/api/admin/monitors')
+        .query({ limit: 3, ...(cursor ? { cursor } : {}) })
+        .set(as(admin));
+      seen.push(...page.body.monitors.map((m: { id: string }) => m.id));
+      cursor = page.body.nextCursor;
+    } while (cursor);
+    expect(new Set(seen).size).toBe(4);
   });
 });

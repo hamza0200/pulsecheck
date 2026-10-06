@@ -564,6 +564,41 @@ match on email. `cursor` is the previous page's `nextCursor`.
 }
 ```
 
+### `GET /api/admin/monitors?cursor=&limit=&search=&userId=&status=`
+
+Every user's monitors, newest first. This is a **read-only** view: admins can see each
+monitor's URL, status and owner, but only the owner can change a monitor.
+
+| Query    | Rules                                                         |
+| -------- | ------------------------------------------------------------- |
+| `limit`  | 1–100, default 25                                             |
+| `cursor` | the previous page's `nextCursor`                              |
+| `search` | case-insensitive match on URL, monitor name or owner email    |
+| `userId` | only this user's monitors (the Users tab links here)          |
+| `status` | `UP`, `DOWN` or `UNKNOWN` (active monitors only), or `PAUSED` |
+
+```json
+200 {
+  "monitors": [
+    {
+      "id": "uuid",
+      "name": "bobs-shop.com",
+      "url": "https://bobs-shop.com",
+      "intervalMinutes": 5,
+      "isPaused": false,
+      "currentStatus": "DOWN",
+      "lastCheckedAt": "2026-10-06T16:40:00.000Z",
+      "sslExpiresAt": null,
+      "createdAt": "2026-10-06T16:30:00.000Z",
+      "owner": { "id": "uuid", "email": "bob@example.com", "isDisabled": false }
+    }
+  ],
+  "nextCursor": null
+}
+```
+
+`400 VALIDATION_ERROR` for an invalid `userId` or `status`.
+
 ### `PATCH /api/admin/users/:id`
 
 ```json

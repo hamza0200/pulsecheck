@@ -14,6 +14,7 @@ import {
 import type { MonitorDetail as MonitorDetailData } from '../api/types';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Button } from '../components/forms';
+import { ChevronLeftIcon, TrashIcon } from '../components/icons';
 import { ErrorState, Spinner } from '../components/PageState';
 import { ResponseChart } from '../components/ResponseChart';
 import { Stat, StatRow } from '../components/Stats';
@@ -49,7 +50,11 @@ export function MonitorDetail() {
           }
           onRetry={missing ? undefined : () => void refetch()}
         />
-        <Link to="/dashboard" className="font-semibold underline underline-offset-4">
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center gap-1 font-semibold hover:underline hover:underline-offset-4"
+        >
+          <ChevronLeftIcon />
           Back to dashboard
         </Link>
       </div>
@@ -83,8 +88,9 @@ function MonitorView({ monitor }: { monitor: MonitorDetailData }) {
     <div>
       <Link
         to="/dashboard"
-        className="text-sm text-muted underline underline-offset-4 hover:text-ink"
+        className="-ml-1 inline-flex items-center gap-1 rounded-md py-1 pr-2 pl-1 text-sm text-muted hover:bg-grid/60 hover:text-ink"
       >
+        <ChevronLeftIcon />
         Back to dashboard
       </Link>
 
@@ -134,8 +140,14 @@ function MonitorView({ monitor }: { monitor: MonitorDetailData }) {
           >
             Edit
           </Link>
-          <Button variant="ghost" className="text-down" onClick={() => setConfirmDelete(true)}>
-            Delete
+          <Button
+            variant="dangerGhost"
+            className="px-2.5"
+            aria-label={`Delete ${monitor.name}`}
+            title="Delete"
+            onClick={() => setConfirmDelete(true)}
+          >
+            <TrashIcon className="size-5" />
           </Button>
         </div>
       </div>

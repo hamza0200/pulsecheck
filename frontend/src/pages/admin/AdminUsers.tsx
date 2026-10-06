@@ -1,4 +1,5 @@
 import { useDeferredValue, useState } from 'react';
+import { Link } from 'react-router';
 import { useAdminUsers, useSetUserDisabled } from '../../api/admin';
 import { ApiError } from '../../api/client';
 import type { AdminUser } from '../../api/types';
@@ -21,8 +22,8 @@ export function AdminUsers() {
 
   return (
     <div>
-      <h1 className="text-[2rem] leading-tight font-semibold tracking-tight">Users</h1>
-      <div className="mt-6 max-w-sm">
+      <h2 className="sr-only">Users</h2>
+      <div className="max-w-sm">
         <TextField
           label="Search by email"
           type="search"
@@ -82,13 +83,25 @@ export function AdminUsers() {
                     <td className={`py-3 pr-4 ${u.isDisabled ? 'font-semibold text-down' : ''}`}>
                       {u.isDisabled ? 'Disabled' : 'Active'}
                     </td>
-                    <td className="py-3 pr-4 text-right">{u.monitorCount}</td>
+                    <td className="py-3 pr-4 text-right">
+                      {u.monitorCount > 0 ? (
+                        <Link
+                          to={`/admin/monitors?userId=${u.id}&email=${encodeURIComponent(u.email)}`}
+                          className="font-semibold underline underline-offset-4"
+                          aria-label={`View ${u.monitorCount} monitors of ${u.email}`}
+                        >
+                          {u.monitorCount}
+                        </Link>
+                      ) : (
+                        0
+                      )}
+                    </td>
                     <td className="py-3 pr-4 whitespace-nowrap">{formatDate(u.createdAt)}</td>
                     <td className="py-3 text-right">
                       {u.id !== me?.id && (
                         <Button
-                          variant={u.isDisabled ? 'secondary' : 'ghost'}
-                          className={`px-3 py-1 ${u.isDisabled ? '' : 'text-down'}`}
+                          variant={u.isDisabled ? 'secondary' : 'dangerGhost'}
+                          className="px-3 py-1"
                           onClick={() => setTarget(u)}
                         >
                           {u.isDisabled ? 'Enable' : 'Disable'}

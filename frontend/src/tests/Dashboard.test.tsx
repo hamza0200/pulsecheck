@@ -4,7 +4,8 @@
  * - Rows with status badges (word + glyph), down monitors first, summary figures
  * - Live updates: gets a stream ticket, shows "Live", refetches on monitor.checked,
  *   announces monitor.down
- * - Delete asks for confirmation before calling the API
+ * - Each row has a View link to the monitor's detail page
+ * - Delete (a trash icon named "Delete <monitor>") asks for confirmation before calling the API
  */
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -102,6 +103,15 @@ describe('Dashboard', () => {
     expect(await screen.findByText('example.com just went down.')).toBeInTheDocument();
   });
 
+  it('has a View link to each monitor’s detail page', async () => {
+    api([monitorFixture({ id: 'm1', name: 'example.com' })]);
+    renderApp('/dashboard');
+    expect(await screen.findByRole('link', { name: 'View example.com' })).toHaveAttribute(
+      'href',
+      '/monitors/m1',
+    );
+  });
+
   it('asks for confirmation before deleting', async () => {
     const fetchSpy = api([monitorFixture()], (path, init) =>
       path === '/api/monitors/m1' && init?.method === 'DELETE'
@@ -109,7 +119,7 @@ describe('Dashboard', () => {
         : undefined,
     );
     renderApp('/dashboard');
-    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete example.com' }));
     expect(screen.getByRole('heading', { name: 'Delete example.com?' })).toBeInTheDocument();
     expect(fetchSpy.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
 

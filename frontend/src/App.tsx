@@ -2,6 +2,8 @@ import { Navigate, type RouteObject } from 'react-router';
 import { AdminRoute, GuestRoute, ProtectedRoute } from './auth/guards';
 import { AppShell } from './components/AppShell';
 import { Account } from './pages/Account';
+import { AdminLayout } from './pages/admin/AdminLayout';
+import { AdminMonitors } from './pages/admin/AdminMonitors';
 import { AdminOverview } from './pages/admin/AdminOverview';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { Dashboard } from './pages/Dashboard';
@@ -45,8 +47,14 @@ export const routes: RouteObject[] = [
           {
             element: <AdminRoute />,
             children: [
-              { path: '/admin', element: <AdminOverview /> },
-              { path: '/admin/users', element: <AdminUsers /> },
+              {
+                element: <AdminLayout />,
+                children: [
+                  { path: '/admin', element: <AdminOverview /> },
+                  { path: '/admin/users', element: <AdminUsers /> },
+                  { path: '/admin/monitors', element: <AdminMonitors /> },
+                ],
+              },
             ],
           },
         ],

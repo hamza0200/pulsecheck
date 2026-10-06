@@ -385,5 +385,7 @@ Users share tables; isolation is enforced in the repository layer:
   id stripped.
 - Alert emails go only to the monitor's owner, re-read from the database at send time, and
   only if `alerts_enabled` is on and the owner isn't disabled.
-- Admin endpoints are the only cross-tenant views. They return counts and account metadata,
-  never password hashes or tokens.
+- Admin endpoints are the only cross-tenant views. They return counts, account metadata,
+  and a read-only list of every monitor's URL, status and owner email
+  (`GET /api/admin/monitors`). They never return password hashes or tokens, and admins
+  can't change another user's monitors.

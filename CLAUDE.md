@@ -35,7 +35,7 @@ Because of goal 1:
 
 - There is an `ADMIN` role stored in the database. **Admin credentials live only in the database**, never in `.env`.
 - The first admin is created with an interactive CLI command (`npm run admin:create`, see section 6.9).
-- Admins log in through the same login screen and get an extra **Admin** area: list of users (email, signup date, monitor count, active/disabled), ability to disable or re-enable a user, and system stats (checks in the last 24h, last run duration, monitors up/down).
+- Admins log in through the same login screen and get an extra **Admin** area with Overview, Users and Monitors tabs: list of users (email, signup date, monitor count, active/disabled), ability to disable or re-enable a user, system stats (checks in the last 24h, last run duration, monitors up/down), and a read-only list of every user's monitored URLs with status and owner.
 - Admins do not see other users' passwords or tokens, ever.
 
 ### Monitoring
@@ -50,7 +50,7 @@ Because of goal 1:
 
 ### Seed data
 
-`npm run db:seed` attaches these 10 monitors to the **first admin user** (and fails with a clear message telling the developer to run `npm run admin:create` first if no admin exists). It must be idempotent.
+`npm run admin:create` attaches these 10 monitors to the **first admin user** when it creates that admin (skippable with `--no-seed`). `npm run db:seed` does the same on demand (and fails with a clear message telling the developer to run `npm run admin:create` first if no admin exists). Both must be idempotent.
 
 ```
 https://w3toolkit.com
@@ -312,6 +312,7 @@ Errors always use `{ "error": { "code": string, "message": string, "details"?: u
 | GET | `/api/stream?ticket=` | ticket | SSE updates for this user |
 | GET | `/api/admin/stats` | admin | System stats |
 | GET | `/api/admin/users` | admin | Users list |
+| GET | `/api/admin/monitors` | admin | All users' monitors (read-only) |
 | PATCH | `/api/admin/users/:id` | admin | Disable / enable |
 
 Every `/api/monitors/:id...` query filters by **both** `id` and `userId` (IDOR prevention); a test must prove user A gets `404` for user B's monitor. Uptime % is computed with a SQL aggregate, not in memory.
@@ -516,8 +517,8 @@ npm install
 cp backend/.env.example backend/.env
 docker compose up -d
 npm run db:migrate
-npm run admin:create      # prompts for admin email and password
-npm run db:seed           # adds the 10 sites to the admin account
+npm run admin:create      # prompts for admin email and password; adds the 10 sample sites
+npm run db:seed           # optional: re-adds the sample sites (idempotent)
 npm run dev               # frontend http://localhost:5173, API http://localhost:4000
 ```
 

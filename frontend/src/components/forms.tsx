@@ -40,13 +40,14 @@ export function TextField({ label, error, hint, className = '', ...input }: Text
   );
 }
 
-type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
+type Variant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'dangerGhost';
 
 const variants: Record<Variant, string> = {
   primary: 'bg-ink text-paper hover:bg-ink/90',
   secondary: 'border border-grid bg-surface text-ink hover:border-muted',
   danger: 'bg-down text-white hover:bg-down/90',
   ghost: 'text-ink hover:bg-grid/60',
+  dangerGhost: 'text-down hover:bg-down-soft',
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

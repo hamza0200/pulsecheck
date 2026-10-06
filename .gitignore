@@ -8,3 +8,4 @@ coverage/
 .DS_Store
 backend/src/generated/
 .vitest/
+CLAUDE.md

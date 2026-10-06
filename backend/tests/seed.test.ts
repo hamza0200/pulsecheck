@@ -1,7 +1,8 @@
 /**
- * db:seed script (test DB).
+ * Sample monitors / db:seed (test DB).
  * - Fails with a message pointing to `npm run admin:create` when no admin exists
- * - Attaches the 10 sample sites to the FIRST admin and is idempotent
+ * - Attaches the 10 sample sites to the FIRST admin, named by hostname without www., and is
+ *   idempotent
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '../src/lib/prisma.js';
@@ -16,7 +17,7 @@ describe('db:seed', () => {
     await expect(seedDemoMonitors()).rejects.toThrow(/npm run admin:create/);
   });
 
-  it('attaches the 10 sites to the first admin and is idempotent', async () => {
+  it('attaches the 10 sample sites to the first admin and is idempotent', async () => {
     const admin = await prisma.user.create({
       data: { email: 'first-admin@example.com', passwordHash: 'x', role: 'ADMIN' },
     });

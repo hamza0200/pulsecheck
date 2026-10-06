@@ -2,6 +2,9 @@
  * Admin users screen and Account alerts toggle (real routes + providers, fetch faked).
  * - Lists users; the admin's own row has no Disable button
  * - Disabling another user asks for confirmation, then PATCHes { isDisabled: true }
+ * - A user's monitor count links to the Monitors tab filtered to that user
+ * - Admin Monitors tab lists every user's monitors with URL and owner, filtered by userId
+ * - Admin area tabs: Overview, Users, Monitors
  * - Account: the alerts switch PATCHes alertsEnabled and reflects the new state
  */
 import { screen, waitFor, within } from '@testing-library/react';
@@ -49,7 +52,7 @@ describe('AdminUsers', () => {
     });
     renderApp('/admin/users');
 
-    const myRow = (await screen.findByRole('cell', { name: /ada@example\.com/ })).closest('tr')!;
+    const myRow = (await screen.findByRole('cell', { name: /^ada@example\.com/ })).closest('tr')!;
     expect(within(myRow).queryByRole('button')).not.toBeInTheDocument();
 
     const bobRow = screen.getByRole('cell', { name: 'bob@example.com' }).closest('tr')!;
@@ -60,6 +63,56 @@ describe('AdminUsers', () => {
       const patch = fetchSpy.mock.calls.find(([, init]) => init?.method === 'PATCH');
       expect(bodyOf(patch?.[1])).toEqual({ isDisabled: true });
     });
+  });
+});
+
+describe('Admin monitors tab', () => {
+  it("links a user's monitor count to their monitors, which lists URLs and owners", async () => {
+    const fetchSpy = mockApi((path) => {
+      if (path === '/api/auth/refresh') return json(sessionFor('ADMIN'));
+      if (path.startsWith('/api/admin/users?')) return json({ users, nextCursor: null });
+      if (path.startsWith('/api/admin/monitors?')) {
+        return json({
+          monitors: [
+            {
+              id: 'm9',
+              name: 'bobs-shop.com',
+              url: 'https://bobs-shop.com',
+              intervalMinutes: 5,
+              isPaused: false,
+              currentStatus: 'DOWN',
+              lastCheckedAt: new Date().toISOString(),
+              sslExpiresAt: null,
+              createdAt: '2026-10-02T00:00:00Z',
+              owner: { id: 'u2', email: 'bob@example.com', isDisabled: false },
+            },
+          ],
+          nextCursor: null,
+        });
+      }
+      return undefined;
+    });
+    const { router } = renderApp('/admin/users');
+    expect(await screen.findByRole('link', { name: 'Users' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByRole('link', { name: 'Monitors' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Overview' })).toBeInTheDocument();
+
+    await userEvent.click(
+      await screen.findByRole('link', { name: 'View 2 monitors of bob@example.com' }),
+    );
+    await waitFor(() => expect(router.state.location.pathname).toBe('/admin/monitors'));
+    expect(await screen.findByText('https://bobs-shop.com')).toHaveAttribute(
+      'href',
+      'https://bobs-shop.com',
+    );
+    expect(screen.getByText(/Showing monitors of/)).toHaveTextContent('bob@example.com');
+    const call = fetchSpy.mock.calls
+      .map(([p]) => String(p))
+      .find((p) => p.startsWith('/api/admin/monitors?'));
+    expect(new URLSearchParams(call!.split('?')[1]).get('userId')).toBe('u2');
   });
 });
 

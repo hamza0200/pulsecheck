@@ -12,17 +12,27 @@ import { parseArgs } from 'node:util';
 import type { ZodType } from 'zod';
 import { emailSchema, passwordSchema } from '../src/modules/auth/auth.schemas.js';
 import { createAdminUser, promoteToAdmin } from '../src/modules/admin/admin.bootstrap.js';
+import {
+  SEED_URLS,
+  defaultMonitorName,
+  seedDemoMonitors,
+} from '../src/modules/admin/demo-monitors.js';
 import { prisma } from '../src/lib/prisma.js';
 
 // [Node concept: CLI] process.argv parsing with node:util parseArgs (no dependency).
 const { values: args } = parseArgs({
-  options: { email: { type: 'string' }, help: { type: 'boolean', short: 'h' } },
+  options: {
+    email: { type: 'string' },
+    'no-seed': { type: 'boolean' },
+    help: { type: 'boolean', short: 'h' },
+  },
 });
 
 if (args.help) {
   stdout.write(
-    'Usage: npm run admin:create [-- --email <email>]\n' +
-      'Without a terminal, the password is read from the first line of stdin.\n',
+    'Usage: npm run admin:create -- [--email <email>] [--no-seed]\n' +
+      'Without a terminal, the password is read from the first line of stdin.\n' +
+      'Creating the first admin also adds the sample monitors unless --no-seed is given.\n',
   );
   process.exit(0);
 }
@@ -114,6 +124,7 @@ async function main() {
     const password = validateOrExit(passwordSchema, await promptNewPassword(), 'password');
     await createAdminUser(email, password);
     stdout.write(`✔ Created admin ${email}\n`);
+    await seedIfFirstAdmin();
     return;
   }
 
@@ -140,6 +151,24 @@ async function main() {
   stdout.write(
     `✔ ${email} is now an admin${existing.role === 'ADMIN' ? ' (password updated)' : ''}\n`,
   );
+  if (existing.role !== 'ADMIN') {
+    // A promoted user may already have monitors; don't add samples behind their back.
+    stdout.write('  To add the sample monitors to the first admin, run: npm run db:seed\n');
+  }
+}
+
+/**
+ * A fresh install should show data straight away: when the admin just created is the only
+ * admin, attach the sample monitors to it (idempotent, same as `npm run db:seed`).
+ */
+async function seedIfFirstAdmin() {
+  if (args['no-seed']) return;
+  if ((await prisma.user.count({ where: { role: 'ADMIN' } })) !== 1) return;
+  const { created } = await seedDemoMonitors();
+  if (created > 0) {
+    const names = SEED_URLS.map(defaultMonitorName).join(', ');
+    stdout.write(`✔ Added ${created} sample monitors to the dashboard: ${names}\n`);
+  }
 }
 
 try {

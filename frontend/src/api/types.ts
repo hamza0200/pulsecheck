@@ -93,3 +93,18 @@ export interface AdminUser {
   createdAt: string;
   monitorCount: number;
 }
+
+export interface AdminMonitor {
+  id: string;
+  name: string;
+  url: string;
+  intervalMinutes: number;
+  isPaused: boolean;
+  currentStatus: MonitorStatus;
+  lastCheckedAt: string | null;
+  sslExpiresAt: string | null;
+  createdAt: string;
+  owner: { id: string; email: string; isDisabled: boolean };
+}
+
+export type AdminMonitorStatusFilter = '' | 'UP' | 'DOWN' | 'UNKNOWN' | 'PAUSED';

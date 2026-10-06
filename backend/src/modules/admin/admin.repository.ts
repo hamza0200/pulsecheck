@@ -17,6 +17,20 @@ export function toAdminUser({ _count, ...user }: AdminUserRow) {
   return { ...user, monitorCount: _count.monitors };
 }
 
+// Admins may see every monitor's URL and status, and who owns it (read-only).
+export const adminMonitorSelect = {
+  id: true,
+  name: true,
+  url: true,
+  intervalMinutes: true,
+  isPaused: true,
+  currentStatus: true,
+  lastCheckedAt: true,
+  sslExpiresAt: true,
+  createdAt: true,
+  user: { select: { id: true, email: true, isDisabled: true } },
+} satisfies Prisma.MonitorSelect;
+
 export const adminRepository = {
   async stats() {
     const [users, disabledUsers, admins, monitorsByStatus, pausedMonitors, checksLast24h] =
@@ -52,6 +66,38 @@ export const adminRepository = {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: opts.limit + 1,
       select: adminUserSelect,
+    });
+  },
+
+  /** Every user's monitors, newest first, keyset-paginated on (createdAt, id). */
+  listMonitors(opts: {
+    limit: number;
+    search?: string;
+    userId?: string;
+    status?: 'UP' | 'DOWN' | 'UNKNOWN' | 'PAUSED';
+    after?: { createdAt: Date; id: string };
+  }) {
+    const filters: Prisma.MonitorWhereInput[] = [];
+    if (opts.userId) filters.push({ userId: opts.userId });
+    if (opts.status === 'PAUSED') filters.push({ isPaused: true });
+    else if (opts.status) filters.push({ currentStatus: opts.status, isPaused: false });
+    if (opts.search) {
+      const contains = { contains: opts.search, mode: 'insensitive' } as const;
+      filters.push({ OR: [{ url: contains }, { name: contains }, { user: { email: contains } }] });
+    }
+    if (opts.after) {
+      filters.push({
+        OR: [
+          { createdAt: { lt: opts.after.createdAt } },
+          { createdAt: opts.after.createdAt, id: { lt: opts.after.id } },
+        ],
+      });
+    }
+    return prisma.monitor.findMany({
+      where: { AND: filters },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: opts.limit + 1,
+      select: adminMonitorSelect,
     });
   },
 

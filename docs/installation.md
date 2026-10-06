@@ -25,7 +25,8 @@ cp backend/.env.example backend/.env      # local settings, never committed
 docker compose up -d                      # Postgres (dev + test) and Mailpit
 npm run db:migrate                        # create the tables in the dev database
 npm run admin:create                      # prompts for the admin email and password
-npm run db:seed                           # adds 10 sample websites to the admin's account
+                                          # and adds 10 sample websites to that account
+npm run db:seed                           # optional: re-adds the sample websites (idempotent)
 npm run dev                               # API on :4000, web app on :5173
 ```
 
@@ -64,6 +65,14 @@ echo 'a-long-password-here' | npm run admin:create -- --email admin@example.com
 ```
 
 Running `admin:create` with an email that already exists offers to promote that user to admin.
+
+### Sample monitors
+
+When `admin:create` creates the **first** admin, it also adds ten sample monitors to that
+account (the sites listed in `backend/src/modules/admin/demo-monitors.ts`). Pass `--no-seed`
+to skip them (`npm run admin:create -- --no-seed`). Promoting an existing user never adds
+them. `npm run db:seed` adds any missing samples to the first admin at any time and is safe
+to re-run.
 
 ## Testing the forgot-password flow with Mailpit
 
@@ -136,6 +145,11 @@ An error like `CERT_HAS_EXPIRED` or `UNABLE_TO_VERIFY_LEAF_SIGNATURE` means the 
 certificate really is broken. Browsers would show a warning too, so PulseCheck counts it as
 down. The dashboard's **SSL expires in** column shows the days left, and the monitor's
 detail page shows the exact expiry date.
+
+**The dashboard says "No monitors yet" for the admin.** The samples go to the first admin
+only when `admin:create` creates it. If the admin was created with `--no-seed`, was promoted
+from an existing user, or was created before this feature existed, run `npm run db:seed`
+and refresh.
 
 **The dashboard says "Reconnecting…".** The live-update stream dropped, usually because the
 API stopped or restarted (`tsx watch` restarts it on every backend file change). It

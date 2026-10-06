@@ -5,6 +5,7 @@ import { useCheckNow, useDeleteMonitor, useMonitors, useUpdateMonitor } from '..
 import type { MonitorListItem } from '../api/types';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Button } from '../components/forms';
+import { TrashIcon } from '../components/icons';
 import { EmptyState, ErrorState, Spinner } from '../components/PageState';
 import { Stat, StatRow } from '../components/Stats';
 import { CheckStrip, StatusBadge } from '../components/status';
@@ -221,7 +222,14 @@ export function Dashboard() {
                       <SslCell expiresAt={m.sslExpiresAt} now={now} />
                     </td>
                     <td className="py-3">
-                      <div className="flex justify-end">
+                      <div className="flex items-center justify-end">
+                        <Link
+                          to={`/monitors/${m.id}`}
+                          className="inline-flex items-center rounded-md px-2 py-1 font-semibold hover:bg-grid/60"
+                          aria-label={`View ${m.name}`}
+                        >
+                          View
+                        </Link>
                         <Button
                           variant="ghost"
                           className="px-2 py-1"
@@ -251,11 +259,13 @@ export function Dashboard() {
                           Edit
                         </Link>
                         <Button
-                          variant="ghost"
-                          className="px-2 py-1 text-down"
+                          variant="dangerGhost"
+                          className="px-2 py-1.5"
+                          aria-label={`Delete ${m.name}`}
+                          title="Delete"
                           onClick={() => setToDelete(m)}
                         >
-                          Delete
+                          <TrashIcon />
                         </Button>
                       </div>
                     </td>
