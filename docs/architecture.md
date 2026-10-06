@@ -1,6 +1,7 @@
 # Architecture
 
-> Milestone 8 status: this document covers the frontend ↔ API setup and the auth flow. The
+> Milestone 9 status: this document covers the frontend ↔ API setup, the auth flow and the
+> frontend data flow. The
 > full component, check-run, forgot-password and state diagrams, the middleware chain and
 > the data model are added in the docs pass (milestone 11).
 
@@ -68,3 +69,24 @@ sequenceDiagram
   end
   Note over B: Access token kept in memory only; T2 lives in the httpOnly cookie
 ```
+
+## Frontend data flow and live updates
+
+- **Server state lives in TanStack Query** (`frontend/src/api/*.ts`). Query keys are grouped
+  under `['monitors', …]`. Every monitor mutation (create, update, pause, check now, delete)
+  invalidates that group, so all screens refetch consistent data. Lists with pagination
+  (check history, admin users) use `useInfiniteQuery` with the API's opaque `nextCursor`.
+- **Live updates** (`frontend/src/hooks/useStatusStream.ts`):
+  1. `POST /api/stream/ticket` with the access token.
+  2. `new EventSource('/api/stream?ticket=…')`.
+  3. On `monitor.checked`, refetch the monitor list (and that monitor's detail), batched over
+     500 ms because a run delivers up to 5 results at once.
+  4. On `monitor.down` / `monitor.recovered`, show a polite live-region notice.
+  5. On error, close the stream and reconnect with a **new** ticket, using exponential backoff
+     with jitter (tickets are single-use, so `EventSource`'s own reconnect can't work).
+     After reconnecting, refetch once to catch up on anything missed.
+- **The dashboard is the triage view:** down monitors sort first. Each row has a 30-check
+  status strip, where failures are taller red ticks so they don't rely on colour alone.
+  Status badges pair a word with a glyph.
+- **CSV download:** a plain link can't send the `Authorization` header, so the client fetches
+  `export.csv` and saves the blob with a temporary object URL.

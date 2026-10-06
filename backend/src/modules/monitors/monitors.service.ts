@@ -62,15 +62,17 @@ export const monitorsService = {
   async list(userId: string) {
     const monitors = await monitorRepository.listForUser(userId);
     const ids = monitors.map((m) => m.id);
-    const [latest, uptime] = await Promise.all([
+    const [latest, uptime, recent] = await Promise.all([
       monitorRepository.latestChecks(ids),
       monitorRepository.uptime24h(ids),
+      monitorRepository.recentChecks(ids),
     ]);
     return {
       monitors: monitors.map((m) => ({
         ...m,
         lastCheck: latest.get(m.id) ?? null,
         uptime24h: uptime.get(m.id) ?? null,
+        recentChecks: recent.get(m.id) ?? [],
       })),
       usage: { used: monitors.length, max: env.MAX_MONITORS_PER_USER },
     };

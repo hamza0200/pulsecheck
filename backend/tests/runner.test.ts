@@ -4,7 +4,7 @@
  *   -> success resolves it, with the right events emitted
  * - SSL expiry is checked at most once a day and warns when fewer than 14 days remain
  * - runChecks only checks due monitors (skips paused, fresh and disabled-owner monitors) and stores
- *   a run summary
+ *   a run summary; an idle tick (nothing due) keeps the previous summary
  * - Overlap guard: a second trigger during a run returns null
  * - One failing site never stops the others
  * - POST /check-now: returns the result, 404 for another user's monitor, rate limited to once per minute
@@ -140,6 +140,10 @@ describe('runChecks', () => {
     expect(new Set(fetchSpy.mock.calls.map(([u]) => u))).toEqual(
       new Set(['https://example.com/never-checked', 'https://example.com/stale']),
     );
+    expect(getLastRunSummary()).toEqual(summary);
+    // A later tick with nothing due doesn't overwrite the useful summary.
+    const idle = await runChecks();
+    expect(idle).toMatchObject({ checked: 0 });
     expect(getLastRunSummary()).toEqual(summary);
     const checked = await prisma.monitor.findMany({
       where: { id: { in: [due.id, stale.id] } },

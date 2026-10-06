@@ -272,14 +272,21 @@ usage against the per-user limit.
         "responseTimeMs": 182,
         "error": null
       },
-      "uptime24h": 99.31
+      "uptime24h": 99.31,
+      "recentChecks": [
+        { "checkedAt": "2026-10-06T08:50:00.000Z", "isUp": true },
+        { "checkedAt": "2026-10-06T09:00:00.000Z", "isUp": false },
+        { "checkedAt": "2026-10-06T09:10:00.000Z", "isUp": true }
+      ]
     }
   ],
   "usage": { "used": 10, "max": 20 }
 }
 ```
 
-`lastCheck` and `uptime24h` are `null` until the first check.
+`lastCheck` and `uptime24h` are `null` until the first check. `recentChecks` holds the last
+30 checks, oldest first (the dashboard's status strip); it comes from one `LATERAL … LIMIT 30`
+query for all monitors.
 
 ### `POST /api/monitors`
 
@@ -528,7 +535,8 @@ No admin endpoint ever returns password hashes or tokens.
 ```
 
 - `lastRun` is `null` until the scheduler has completed a run since the process started (it
-  lives in memory).
+  lives in memory). Ticks that find nothing due don't replace it, so it always describes the
+  last run that actually checked something.
 - `lastRun.down` counts failed checks in that run. `monitors.down` counts monitors currently
   in the `DOWN` state, which needs 2 consecutive failures.
 

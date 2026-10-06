@@ -232,7 +232,9 @@ export async function runChecks(): Promise<RunSummary | null> {
   currentRun = executeRun();
   try {
     const summary = await currentRun;
-    lastRun = summary;
+    // Most ticks find nothing due; keep the last run that actually did work, so the admin
+    // overview shows a meaningful summary instead of "checked 0".
+    if (summary.checked + summary.errors > 0 || !lastRun) lastRun = summary;
     const { checked, up, down, errors, durationMs } = summary;
     logger.info({ checked, up, down, errors, durationMs }, 'Check run finished');
     return summary;

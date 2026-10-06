@@ -8,6 +8,7 @@
  * - Per-user limit (MAX_MONITORS_PER_USER), including under concurrent creates
  * - IDOR: user A gets 404 on every endpoint for user B's monitor
  * - Uptime 24h/7d/30d + average response computed with SQL aggregates
+ * - The list includes each monitor's last 30 checks (oldest first) for the status strip
  * - Cursor pagination of checks (newest first), `since` filter, invalid cursor
  * - Incidents listed newest first
  */
@@ -266,6 +267,11 @@ describe('checks, uptime and incidents', () => {
 
     const list = await request(app).get('/api/monitors').set(as(alice));
     expect(list.body.monitors[0].uptime24h).toBe(75);
+    // Status strip: every check (11 < 30), oldest first.
+    const recent = list.body.monitors[0].recentChecks as { checkedAt: string; isUp: boolean }[];
+    expect(recent).toHaveLength(11);
+    expect(recent.at(-1)).toMatchObject({ isUp: true });
+    expect(new Date(recent[0]!.checkedAt) < new Date(recent.at(-1)!.checkedAt)).toBe(true);
   });
 
   it('paginates checks newest-first with an opaque cursor', async () => {

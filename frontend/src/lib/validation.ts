@@ -52,3 +52,39 @@ export function passwordStrength(password: string): Strength {
   if (classes >= 2) return 'fair';
   return 'weak';
 }
+
+// Monitor rules, mirroring backend/src/modules/monitors/monitors.schemas.ts. The server
+// additionally resolves the hostname and refuses private addresses.
+
+export function validateMonitorUrl(raw: string): string | undefined {
+  const value = raw.trim();
+  if (!value) return 'Enter the URL to monitor';
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return 'Enter a full URL, e.g. https://example.com';
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return 'Only http:// and https:// URLs can be monitored';
+  }
+  if (!['', '80', '443'].includes(url.port))
+    return 'Only the standard ports 80 and 443 are allowed';
+  if (url.username || url.password) return 'URLs with a username or password are not allowed';
+  return undefined;
+}
+
+export function validateInterval(value: string): string | undefined {
+  const n = Number(value);
+  if (!Number.isInteger(n)) return 'Enter a whole number of minutes';
+  if (n < 5) return 'Checks can run at most every 5 minutes';
+  if (n > 1440) return 'Interval can be at most 1440 minutes (24 hours)';
+  return undefined;
+}
+
+export function validateTimeout(value: string): string | undefined {
+  const n = Number(value);
+  if (!Number.isInteger(n)) return 'Enter a whole number of milliseconds';
+  if (n < 1000 || n > 30_000) return 'Timeout must be between 1000 and 30000 ms';
+  return undefined;
+}

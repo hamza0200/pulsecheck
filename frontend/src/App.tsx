@@ -7,7 +7,6 @@ import { AdminUsers } from './pages/admin/AdminUsers';
 import { Dashboard } from './pages/Dashboard';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { Login } from './pages/Login';
-import { MonitorDetail } from './pages/MonitorDetail';
 import { MonitorForm } from './pages/MonitorForm';
 import { NotFound } from './pages/NotFound';
 import { ResetPassword } from './pages/ResetPassword';
@@ -34,7 +33,13 @@ export const routes: RouteObject[] = [
         children: [
           { path: '/dashboard', element: <Dashboard /> },
           { path: '/monitors/new', element: <MonitorForm /> },
-          { path: '/monitors/:id', element: <MonitorDetail /> },
+          {
+            path: '/monitors/:id',
+            // Code-split: the chart library (Recharts) is only downloaded for this page.
+            lazy: async () => ({
+              Component: (await import('./pages/MonitorDetail')).MonitorDetail,
+            }),
+          },
           { path: '/monitors/:id/edit', element: <MonitorForm /> },
           { path: '/account', element: <Account /> },
           {

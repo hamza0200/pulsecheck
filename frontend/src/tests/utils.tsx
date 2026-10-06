@@ -56,3 +56,57 @@ export function renderApp(path: string) {
   );
   return { router, ...utils };
 }
+
+/** Minimal EventSource stand-in (jsdom has none). Tests push events with `emit`. */
+export class FakeEventSource {
+  static instances: FakeEventSource[] = [];
+  listeners = new Map<string, ((event: MessageEvent<string>) => void)[]>();
+  onerror: (() => void) | null = null;
+  closed = false;
+  constructor(public url: string) {
+    FakeEventSource.instances.push(this);
+  }
+  addEventListener(type: string, listener: (event: MessageEvent<string>) => void) {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+  emit(type: string, data: unknown) {
+    const event = new MessageEvent(type, { data: JSON.stringify(data) });
+    for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
+  close() {
+    this.closed = true;
+  }
+}
+
+export function installFakeEventSource() {
+  FakeEventSource.instances = [];
+  vi.stubGlobal('EventSource', FakeEventSource);
+}
+
+export function monitorFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'm1',
+    name: 'example.com',
+    url: 'https://example.com',
+    intervalMinutes: 10,
+    timeoutMs: 10000,
+    isPaused: false,
+    currentStatus: 'UP',
+    consecutiveFailures: 0,
+    lastCheckedAt: new Date().toISOString(),
+    sslExpiresAt: new Date(Date.now() + 60 * 86_400_000).toISOString(),
+    sslCheckedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    lastCheck: {
+      checkedAt: new Date().toISOString(),
+      isUp: true,
+      statusCode: 200,
+      responseTimeMs: 180,
+      error: null,
+    },
+    uptime24h: 100,
+    recentChecks: [{ checkedAt: new Date().toISOString(), isUp: true }],
+    ...overrides,
+  };
+}

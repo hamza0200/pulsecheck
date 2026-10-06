@@ -107,6 +107,35 @@ export const monitorRepository = {
   },
 
   /**
+   * The last `perMonitor` checks of each monitor (oldest first), for the dashboard's
+   * status strip. One query: LATERAL + LIMIT per monitor, served by the
+   * (monitor_id, checked_at DESC) index.
+   */
+  async recentChecks(
+    monitorIds: string[],
+    perMonitor = 30,
+  ): Promise<Map<string, { checkedAt: Date; isUp: boolean }[]>> {
+    const result = new Map<string, { checkedAt: Date; isUp: boolean }[]>();
+    if (monitorIds.length === 0) return result;
+    const rows = await prisma.$queryRaw<{ monitorId: string; checkedAt: Date; isUp: boolean }[]>`
+      SELECT m.id AS "monitorId", c.checked_at AS "checkedAt", c.is_up AS "isUp"
+      FROM unnest(${monitorIds}::uuid[]) AS m(id)
+      CROSS JOIN LATERAL (
+        SELECT checked_at, is_up FROM checks
+        WHERE monitor_id = m.id
+        ORDER BY checked_at DESC
+        LIMIT ${perMonitor}
+      ) c
+      ORDER BY m.id, c.checked_at ASC`;
+    for (const { monitorId, checkedAt, isUp } of rows) {
+      const list = result.get(monitorId) ?? [];
+      list.push({ checkedAt, isUp });
+      result.set(monitorId, list);
+    }
+    return result;
+  },
+
+  /**
    * 24h uptime % for many monitors in one aggregate query. The database does the
    * counting; we never load individual checks into memory.
    */

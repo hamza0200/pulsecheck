@@ -10,7 +10,7 @@
   --color-surface: #ffffff; /* raised panels and inputs */
   --color-ink: #1c2b25; /* text and primary actions: deep spruce */
   --color-muted: #56645e; /* secondary text, 5.6:1 on paper */
-  --color-up: #1f8a5b; /* site is up */
+  --color-up: #008571; /* site is up (validated vs down for colour-blind separation) */
   --color-up-soft: #e3f2ea;
   --color-down: #c2362f; /* site is down, errors */
   --color-down-soft: #fbe9e7;
