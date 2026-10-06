@@ -91,7 +91,9 @@ never touch the development database: the test setup swaps `DATABASE_URL` for
 
 ## Troubleshooting
 
-**A port is already in use.** Another project may already use 5432, 5433, 1025 or 8025.
+**A port is already in use.** If the API logs `Port 4000 is already in use`, another
+process holds it: stop it (`lsof -i :4000` shows which) or change `PORT` in `backend/.env`.
+For Docker, another project may already use 5432, 5433, 1025 or 8025.
 Docker Compose reads host ports from a root `.env` file, so create `./.env` (next to
 `docker-compose.yml`, not `backend/.env`) with for example:
 

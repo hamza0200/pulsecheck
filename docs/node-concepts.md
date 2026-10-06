@@ -329,7 +329,9 @@ into SQL migration files. `$transaction` runs several writes atomically.
 `uptime24h` compute uptime with `COUNT(*) FILTER (WHERE …)` in PostgreSQL rather than loading
 checks into memory. `latestChecks` uses `CROSS JOIN LATERAL … LIMIT 1` so each monitor's
 latest check is a single index lookup on `(monitor_id, checked_at DESC)`. The monitor-limit
-transaction takes a `FOR UPDATE` row lock (`monitorRepository.lockUser`).
+transaction takes a `FOR UPDATE` row lock (`monitorRepository.lockUser`). The retention job
+(`backend/src/modules/checks/retention.ts` → `purgeOldChecks`) deletes checks older than 30
+days in batches of 5,000, yielding to the event loop between batches.
 
 **Interview Q:** _Why cursor pagination instead of `LIMIT/OFFSET`?_ **A:** `OFFSET 10000`
 still reads and discards 10,000 rows, so deep pages get slower. Rows inserted while someone
@@ -385,12 +387,73 @@ logs and browser history.
 with its id. `redact` removes secrets before they're written. `/health` (liveness) says "the
 process is alive"; `/ready` (readiness) says "I can serve traffic, the DB is reachable".
 
-**Where:** `backend/src/lib/logger.ts`, `backend/src/middleware/requestId.ts`,
-`backend/src/modules/health/health.routes.ts`.
+**Where:** `backend/src/lib/logger.ts` (`redactOptions`, `redactUrl`, `createLogger`),
+`backend/src/middleware/requestId.ts` (`requestSerializers` log only id, method, masked URL
+and status, never headers or bodies), `backend/src/modules/health/health.routes.ts`. The
+redaction rules are tested against a real Pino instance in `backend/tests/logger.test.ts`.
 
 **Interview Q:** _Why shouldn't the liveness probe check the database?_ **A:** If the
 database blips, an orchestrator would restart every healthy API instance, which fixes nothing
 and adds load. Liveness should only fail when restarting this process would actually help.
+
+## 20. Process lifecycle: graceful shutdown, `unhandledRejection`, stateless processes
+
+**What:** a process receives `SIGTERM` (from Docker, systemd or a PaaS) or `SIGINT` (Ctrl+C).
+A graceful shutdown stops taking new work, lets in-flight work finish, releases resources,
+then exits, with a hard timeout in case something hangs. `unhandledRejection` and
+`uncaughtException` mean the process is in an unknown state: log and exit, and let a
+supervisor restart it. Stateless processes keep no state that matters only in their memory,
+so any instance can be killed or added.
+
+**Where:** `backend/src/server.ts` → `shutdown`, in this order:
+
+1. `stopScheduler()`.
+2. `server.close()`, then `closeAllStreams()` (SSE) and `server.closeIdleConnections()`
+   (keep-alive).
+3. In parallel, `waitForCurrentRun(10_000)`.
+4. `mailer.close()`, then `prisma.$disconnect()`, then `process.exit(0)`.
+
+A 15-second unref'd force-exit timer is the safety net. A busy port (`EADDRINUSE`) exits 1
+with a clear message. Tested end to end in `backend/tests/shutdown.test.ts`, which spawns the
+real server and sends `SIGTERM`.
+
+What's still in-memory (and would move out when scaling): the overlap guard → Postgres
+advisory lock; stream tickets → Redis; rate-limit counters → Redis store; the event bus →
+Redis pub/sub or `LISTEN/NOTIFY`; the last-run summary → a table. See
+[decisions.md](./decisions.md).
+
+**Interview Q:** _Why does `server.close()` sometimes hang forever?_ **A:** It stops new
+connections but waits for existing ones to end, and keep-alive sockets and long-lived
+responses such as SSE never end on their own. End them explicitly
+(`closeIdleConnections`, closing streams) and always keep a force-exit timeout.
+
+## 21. Testing: unit, integration with Supertest + a real test DB, mocking
+
+**What:**
+
+- **Unit tests** cover pure logic: the state machine, `runWithLimit`, `retry`, the SSRF
+  guard, CSV escaping.
+- **Integration tests** drive the real Express app with Supertest against a real PostgreSQL
+  test database, migrated once per run and truncated before each test.
+- **Mocks** replace only the edges: `fetch` (`vi.stubGlobal`), DNS (`vi.mock('node:dns/promises')`),
+  the mailer (`vi.spyOn(mailer, 'send')`) and TLS. That keeps tests fast, deterministic and
+  offline.
+- A few tests run real processes or servers: the `admin:create` CLI, SSE over a real HTTP
+  server, and graceful shutdown.
+
+**Where:**
+
+- `backend/tests/`: each file starts with a comment listing what it covers.
+- `backend/tests/helpers/`: DB reset, auth shortcuts, fake DNS/fetch/mailer.
+- `backend/vitest.config.ts`: `fileParallelism: false`, because files share one database.
+- `frontend/src/tests/`: React Testing Library over the real routes and providers, with fake
+  `fetch` and `EventSource`.
+
+**Interview Q:** _Why use a real database in tests instead of mocking Prisma?_ **A:** The
+riskiest code is the SQL itself: aggregates, row locks, cascades, unique constraints, and
+the `userId` scoping that prevents IDOR. A mocked client would happily "pass" a query that
+PostgreSQL rejects or answers differently. Mock what's slow, external or nondeterministic
+(network, email, time), not your own data layer.
 
 ## 22. ES Modules, npm workspaces, scripts, `.env` handling
 
@@ -408,5 +471,3 @@ at runtime, which is the compiled `.js`. TypeScript resolves `./app.js` back to 
 compile time.
 
 ---
-
-_Sections 20 and 21 are added as those features are built._

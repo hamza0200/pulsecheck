@@ -1,6 +1,7 @@
 import cookieParser from 'cookie-parser';
 import express from 'express';
 import helmet from 'helmet';
+import { createRateLimiter } from './lib/rateLimit.js';
 import { requestLogger } from './middleware/requestId.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { adminRouter } from './modules/admin/admin.routes.js';
@@ -31,6 +32,9 @@ export function createApp() {
   app.use(cookieParser());
 
   app.use(healthRouter);
+  // A broad per-IP ceiling for the whole API (sensitive routes have tighter limits of
+  // their own). Generous enough for a busy dashboard; stops runaway scripts and floods.
+  app.use('/api', createRateLimiter({ windowMs: 60_000, limit: 300 }));
   app.use('/api/auth', authRouter);
   app.use('/api/account', accountRouter);
   app.use('/api/monitors', monitorsRouter);

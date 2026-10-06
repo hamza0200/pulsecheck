@@ -18,6 +18,9 @@ Base URL in development: `http://localhost:5173/api` (through the Vite proxy) or
   `details` appears only for validation errors, as
   `{ "formErrors": string[], "fieldErrors": { "<field>": string[] } }`.
 
+- **Rate limits:** every `/api` route shares a ceiling of 300 requests per minute per IP.
+  Sensitive routes have tighter limits of their own, listed with each endpoint. Limited
+  responses are `429 RATE_LIMITED` with standard `RateLimit` and `RateLimit-Policy` headers.
 - **Every response** carries an `X-Request-Id` header. Quote it when reporting a problem; the
   same id is on every server log line for that request.
 

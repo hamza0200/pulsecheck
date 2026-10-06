@@ -14,6 +14,17 @@ registerAlertListeners();
 const app = createApp();
 const server = createServer(app);
 
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    logger.fatal(
+      `Port ${env.PORT} is already in use. Stop the other process or set PORT in backend/.env.`,
+    );
+  } else {
+    logger.fatal({ err }, 'HTTP server error');
+  }
+  process.exit(1);
+});
+
 server.listen(env.PORT, () => {
   logger.info(`PulseCheck API listening on http://localhost:${env.PORT}`);
   if (env.SCHEDULER_ENABLED) startScheduler();
@@ -36,15 +47,18 @@ async function shutdown(signal: string) {
   }, 15_000);
   forceExit.unref();
 
+  // 1. No new work: stop the scheduler's timers.
   stopScheduler();
-  // Stop accepting new connections. close() resolves once every open connection has
-  // ended, so end the long-lived SSE streams and idle keep-alive sockets straight away.
+  // 2. Stop accepting connections. close() resolves once every open connection has ended,
+  //    so end the long-lived SSE streams and idle keep-alive sockets straight away;
+  //    in-flight requests get to finish.
   const closed = new Promise<void>((resolve) => server.close(() => resolve()));
   closeAllStreams();
   server.closeIdleConnections();
-  await closed;
-  // Let a check run in progress finish its writes (capped), so no check is half-recorded.
-  await waitForCurrentRun(10_000);
+  // 3. Meanwhile, let a check run in progress finish its writes (capped at 10s), so no
+  //    check is half-recorded.
+  await Promise.all([closed, waitForCurrentRun(10_000)]);
+  // 4. Only now release shared resources the requests and checks were using.
   mailer.close();
   await prisma.$disconnect();
 
