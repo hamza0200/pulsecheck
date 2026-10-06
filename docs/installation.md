@@ -121,8 +121,9 @@ startup and lists each bad value. Compare your file against `backend/.env.exampl
 
 **Emails don't arrive in Mailpit.** Check that the `mailpit` container is running and that
 `SMTP_HOST`/`SMTP_PORT` in `backend/.env` point at it (`localhost` / `1025` by default). For
-alerts, also check that the user has **alert emails** enabled on the Account page. API logs
-show `Failed to send email` with the reason if delivery failed.
+alerts, also check that the user has **alert emails** enabled on the Account page. If
+delivery fails, the API logs `Failed to send email` (password reset) or
+`Failed to send alert email` (alerts) with the reason.
 
 **A site is wrongly marked down.** Some sites sit behind a firewall or bot protection
 (Cloudflare, Sucuri, etc.) that blocks unknown clients or our honest
@@ -133,7 +134,13 @@ after two consecutive failed checks.
 
 An error like `CERT_HAS_EXPIRED` or `UNABLE_TO_VERIFY_LEAF_SIGNATURE` means the site's HTTPS
 certificate really is broken. Browsers would show a warning too, so PulseCheck counts it as
-down. The **SSL** column shows the expiry date.
+down. The dashboard's **SSL expires in** column shows the days left, and the monitor's
+detail page shows the exact expiry date.
+
+**The dashboard says "Reconnecting…".** The live-update stream dropped, usually because the
+API stopped or restarted (`tsx watch` restarts it on every backend file change). It
+reconnects on its own with increasing delays; the data on screen refreshes once it's back.
+If it never reconnects, check the API terminal for errors.
 
 **A private or local URL is refused.** That's the SSRF guard (see
 [node-concepts.md](./node-concepts.md)). For local testing only, set

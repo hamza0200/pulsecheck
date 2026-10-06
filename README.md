@@ -6,7 +6,7 @@ its SSL certificate has left, and email alerts when it goes down or recovers. It
 (Express + PostgreSQL) API with a React front end, built to run locally and to exercise the
 core Node.js backend concepts in real code.
 
-> _Screenshot placeholder: `docs/screenshot.png`_
+![PulseCheck dashboard: monitors with status, a strip of the last 30 checks, response time, uptime and SSL expiry](docs/screenshot.png)
 
 ## Features
 
