@@ -127,3 +127,98 @@ Auth: user.
 ```json
 200 { "user": { "id": "uuid", "email": "ada@example.com", "role": "USER", "alertsEnabled": true } }
 ```
+
+### `POST /api/auth/forgot-password`
+
+No auth. Rate limit: 5 per 15 minutes per IP + email.
+
+```json
+{ "email": "ada@example.com" }
+```
+
+Always responds the same way, whether or not the account exists:
+
+```json
+200 { "message": "If an account exists for that email, we've sent a link to reset the password." }
+```
+
+If the account exists and isn't disabled, older unused reset links are invalidated and an
+email with `${APP_URL}/reset-password?token=<token>` is sent in the background. The link is
+single-use and expires after 30 minutes. Only a SHA-256 hash of the token is stored.
+
+### `POST /api/auth/reset-password`
+
+No auth. Rate limit: 10 per 15 minutes per IP.
+
+```json
+{ "token": "<token from the email link>", "password": "a-new-password-123" }
+```
+
+| Status | Body / code                                                          |
+| ------ | -------------------------------------------------------------------- |
+| 200    | `{ "message": "Your password has been reset. You can now log in." }` |
+| 400    | `INVALID_OR_EXPIRED_TOKEN`: unknown, used or expired token           |
+| 400    | `VALIDATION_ERROR`: the new password breaks the password rules       |
+
+On success every refresh token of that user is revoked, which signs out all sessions.
+
+---
+
+## Account
+
+All endpoints need a user access token.
+
+### `GET /api/account`
+
+```json
+200 {
+  "account": {
+    "id": "uuid",
+    "email": "ada@example.com",
+    "role": "USER",
+    "alertsEnabled": true,
+    "createdAt": "2026-10-06T08:00:00.000Z"
+  }
+}
+```
+
+### `PATCH /api/account`
+
+Only `alertsEnabled` can be changed. Unknown fields such as `role` are rejected with `400`.
+
+```json
+{ "alertsEnabled": false }
+```
+
+Returns `200 { "account": { … } }`.
+
+### `POST /api/account/change-password`
+
+Rate limit: 10 per 15 minutes per IP.
+
+```json
+{ "currentPassword": "old-password-123", "newPassword": "new-password-456" }
+```
+
+| Status | Body / code                                                               |
+| ------ | ------------------------------------------------------------------------- |
+| 200    | `{ "message": "Password changed. Other sessions have been signed out." }` |
+| 400    | `INVALID_PASSWORD` (`details.fieldErrors.currentPassword`)                |
+| 400    | `VALIDATION_ERROR`: weak new password, or the same as the current one     |
+
+Every other session is revoked. The session making the request stays logged in: the access
+token's `sid` claim identifies its refresh-token family.
+
+### `DELETE /api/account`
+
+Rate limit: 10 per 15 minutes per IP.
+
+```json
+{ "password": "my-password-123" }
+```
+
+| Status | Body / code                                                                            |
+| ------ | -------------------------------------------------------------------------------------- |
+| 204    | Deleted. Monitors, checks, incidents and tokens are removed by cascade; cookie cleared |
+| 400    | `INVALID_PASSWORD`                                                                     |
+| 409    | `LAST_ADMIN`: the only active admin can't delete their account                         |

@@ -51,7 +51,11 @@ async function issueSession(
     },
     db,
   );
-  return { accessToken: signAccessToken(user), refreshToken, user: toPublicUser(user) };
+  return {
+    accessToken: signAccessToken(user, familyId),
+    refreshToken,
+    user: toPublicUser(user),
+  };
 }
 
 function isUniqueViolation(err: unknown): boolean {
@@ -138,10 +142,5 @@ export const authService = {
     if (record && safeEqual(record.tokenHash, hashToken(rawToken))) {
       await refreshTokenRepository.revokeIfActive(record.id);
     }
-  },
-
-  /** The family of the given refresh token, used to keep the current session alive. */
-  familyOf(rawToken: string | undefined): string | undefined {
-    return rawToken ? verifyRefreshToken(rawToken)?.fam : undefined;
   },
 };

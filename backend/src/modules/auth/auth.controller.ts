@@ -1,8 +1,14 @@
 import type { RequestHandler } from 'express';
 import { currentUser } from '../../middleware/requireAuth.js';
 import { clearRefreshCookie, readRefreshCookie, setRefreshCookie } from './auth.cookies.js';
-import type { LoginInput, SignupInput } from './auth.schemas.js';
+import type {
+  ForgotPasswordInput,
+  LoginInput,
+  ResetPasswordInput,
+  SignupInput,
+} from './auth.schemas.js';
 import { type Session, authService } from './auth.service.js';
+import { FORGOT_PASSWORD_MESSAGE, passwordResetService } from './password-reset.service.js';
 
 // Controllers translate HTTP <-> service calls. They never contain business rules.
 
@@ -36,5 +42,22 @@ export const logout: RequestHandler = async (req, res) => {
 };
 
 export const me: RequestHandler = (req, res) => {
-  res.json({ user: currentUser(req) });
+  const { id, email, role, alertsEnabled } = currentUser(req);
+  res.json({ user: { id, email, role, alertsEnabled } });
+};
+
+export const forgotPassword: RequestHandler<object, unknown, ForgotPasswordInput> = async (
+  req,
+  res,
+) => {
+  await passwordResetService.requestReset(req.body.email);
+  res.json({ message: FORGOT_PASSWORD_MESSAGE });
+};
+
+export const resetPassword: RequestHandler<object, unknown, ResetPasswordInput> = async (
+  req,
+  res,
+) => {
+  await passwordResetService.resetPassword(req.body.token, req.body.password);
+  res.json({ message: 'Your password has been reset. You can now log in.' });
 };

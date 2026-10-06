@@ -72,3 +72,30 @@ export const refreshTokenRepository = {
     });
   },
 };
+
+export const passwordResetRepository = {
+  /** Removes a user's unused reset tokens so only the newest link works. */
+  deleteUnusedForUser(userId: string, db: Db = prisma) {
+    return db.passwordResetToken.deleteMany({ where: { userId, usedAt: null } });
+  },
+
+  create(data: { userId: string; tokenHash: string; expiresAt: Date }, db: Db = prisma) {
+    return db.passwordResetToken.create({ data });
+  },
+
+  findUsable(tokenHash: string) {
+    return prisma.passwordResetToken.findFirst({
+      where: { tokenHash, usedAt: null, expiresAt: { gt: new Date() } },
+      include: { user: true },
+    });
+  },
+
+  /** Marks a token used only if nobody else did first. Returns true if this call won. */
+  async markUsed(id: string, db: Db = prisma): Promise<boolean> {
+    const result = await db.passwordResetToken.updateMany({
+      where: { id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    return result.count === 1;
+  },
+};

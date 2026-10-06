@@ -32,12 +32,17 @@ export function safeEqual(a: string, b: string): boolean {
 const accessPayloadSchema = z.object({
   sub: z.string(),
   role: z.enum(['USER', 'ADMIN']),
+  /** Session id: the refresh-token family this access token was issued from. */
+  sid: z.string(),
   typ: z.literal('access'),
 });
 export type AccessTokenPayload = z.infer<typeof accessPayloadSchema>;
 
-export function signAccessToken(user: { id: string; role: 'USER' | 'ADMIN' }): string {
-  return jwt.sign({ role: user.role, typ: 'access' }, env.JWT_ACCESS_SECRET, {
+export function signAccessToken(
+  user: { id: string; role: 'USER' | 'ADMIN' },
+  sessionId: string,
+): string {
+  return jwt.sign({ role: user.role, sid: sessionId, typ: 'access' }, env.JWT_ACCESS_SECRET, {
     subject: user.id,
     expiresIn: ACCESS_TOKEN_TTL_SECONDS,
     algorithm: 'HS256',

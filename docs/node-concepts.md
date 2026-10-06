@@ -130,6 +130,23 @@ a conditional update?_ **A:** Atomicity: a crash between the two must not leave 
 logged out or holding two valid tokens. `updateMany where revokedAt IS NULL` returns how many
 rows changed, so two concurrent refreshes can't both succeed.
 
+## 17. Email with Nodemailer (SMTP) and a local catcher
+
+**What:** Nodemailer speaks SMTP to any mail server. Locally that server is Mailpit, which
+accepts every message and shows it in a web inbox, so no real email ever leaves the machine.
+In production only `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS` change.
+
+**Where:** `backend/src/lib/mailer.ts` (`mailer.send`, `mailer.sendInBackground`, pooled
+transport closed on shutdown). The reset email is built in
+`backend/src/modules/auth/auth.emails.ts` and sent from `passwordResetService.requestReset`.
+Tests replace `mailer.send` with a `vi.spyOn` mock (`backend/tests/helpers/mail.ts`).
+
+**Interview Q:** _Why doesn't the forgot-password endpoint await the email?_ **A:** Two
+reasons. Awaiting SMTP would make responses for real accounts noticeably slower than for
+unknown emails, which leaks who has an account through timing. It also ties the API's
+latency and availability to the mail server's. The send runs in the background, and its
+failure is logged rather than thrown.
+
 ## 19. Structured logging with request ids and redaction; health vs readiness
 
 **What:** Pino writes JSON log lines. pino-http gives each request a child logger stamped
@@ -160,4 +177,4 @@ compile time.
 
 ---
 
-_Sections 2–9, 15, 17, 18, 20 and 21 are added as those features are built._
+_Sections 2–9, 15, 18, 20 and 21 are added as those features are built._

@@ -3,7 +3,12 @@ import { bodyEmail, createRateLimiter } from '../../lib/rateLimit.js';
 import { requireAuth } from '../../middleware/requireAuth.js';
 import { validate } from '../../middleware/validate.js';
 import * as controller from './auth.controller.js';
-import { loginSchema, signupSchema } from './auth.schemas.js';
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  resetPasswordSchema,
+  signupSchema,
+} from './auth.schemas.js';
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
 
@@ -17,6 +22,14 @@ const loginLimiter = createRateLimiter({
 });
 const signupLimiter = createRateLimiter({ windowMs: 60 * 60 * 1000, limit: 20 });
 const refreshLimiter = createRateLimiter({ windowMs: FIFTEEN_MINUTES, limit: 100 });
+// Each request can send an email, so keep this tight to avoid mail-bombing an address.
+const forgotPasswordLimiter = createRateLimiter({
+  windowMs: FIFTEEN_MINUTES,
+  limit: 5,
+  key: bodyEmail,
+  message: 'Too many reset requests, please try again in 15 minutes',
+});
+const resetPasswordLimiter = createRateLimiter({ windowMs: FIFTEEN_MINUTES, limit: 10 });
 
 export const authRouter = Router();
 
@@ -25,3 +38,15 @@ authRouter.post('/login', loginLimiter, validate({ body: loginSchema }), control
 authRouter.post('/refresh', refreshLimiter, controller.refresh);
 authRouter.post('/logout', controller.logout);
 authRouter.get('/me', requireAuth, controller.me);
+authRouter.post(
+  '/forgot-password',
+  forgotPasswordLimiter,
+  validate({ body: forgotPasswordSchema }),
+  controller.forgotPassword,
+);
+authRouter.post(
+  '/reset-password',
+  resetPasswordLimiter,
+  validate({ body: resetPasswordSchema }),
+  controller.resetPassword,
+);

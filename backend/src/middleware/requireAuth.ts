@@ -14,6 +14,8 @@ export interface AuthUser {
 declare module 'express-serve-static-core' {
   interface Request {
     user?: AuthUser;
+    /** Refresh-token family of the current login; lets us keep "this" session alive. */
+    sessionId?: string;
   }
 }
 
@@ -36,11 +38,12 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
   if (user.isDisabled) throw forbidden('ACCOUNT_DISABLED', 'This account has been disabled');
 
   req.user = { id: user.id, email: user.email, role: user.role, alertsEnabled: user.alertsEnabled };
+  req.sessionId = payload.sid;
   next();
 };
 
 /** The authenticated user. Only call from handlers mounted behind requireAuth. */
-export function currentUser(req: Request): AuthUser {
+export function currentUser(req: Pick<Request, 'user'>): AuthUser {
   if (!req.user) throw unauthorized();
   return req.user;
 }

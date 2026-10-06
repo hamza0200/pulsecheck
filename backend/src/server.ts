@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { logger } from './lib/logger.js';
+import { mailer } from './lib/mailer.js';
 import { prisma } from './lib/prisma.js';
 
 const app = createApp();
@@ -30,6 +31,7 @@ async function shutdown(signal: string) {
   // Stop accepting new connections; resolves when in-flight requests finish.
   await new Promise<void>((resolve) => server.close(() => resolve()));
   server.closeIdleConnections();
+  mailer.close();
   await prisma.$disconnect();
 
   logger.info('Shutdown complete');
