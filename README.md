@@ -3,9 +3,11 @@
 **A multi-user uptime monitor.** Add your websites, and PulseCheck checks them on a schedule,
 shows their status live, and emails you when one goes down or comes back up.
 
-![PulseCheck dashboard: monitors with status, a strip of the last 30 checks, response time, uptime and SSL expiry](docs/screenshot.png)
+![PulseCheck dashboard: monitors with status, a strip of the last 30 checks, response time, uptime and SSL expiry](docs/screenshot1.png)
 
 ![PulseCheck dashboard detail: monitors with status, response time, uptime and SSL expiry](docs/screenshot2.png)
+
+![Mailbox: alerts](docs/screenshot3.png)
 
 ## What it does
 
