@@ -129,13 +129,56 @@ listeners synchronously, in registration order. `@types/node` lets you type the 
 event with no listener throws and crashes the process.
 
 **Where:** `backend/src/lib/events.ts` (`events`, `AppEvents`). The runner
-(`modules/checks/runner.ts` → `checkMonitor`) only calls `events.emit(...)`. Listeners
-(alerts, SSE) are added in milestone 6.
+(`modules/checks/runner.ts` → `checkMonitor`) only calls `events.emit(...)`. Listeners:
+
+- `backend/src/modules/alerts/alerts.service.ts` (`registerAlertListeners`, which returns an
+  unsubscribe function).
+- `backend/src/modules/stream/stream.service.ts` (`openStream` adds one listener per event
+  per connection and removes them in `connection.close` on `req.on('close')`).
+
+`events.setMaxListeners(MAX_CONNECTIONS + 10)` raises Node's default warning threshold of 10
+to the number of streams we deliberately allow, so the "possible memory leak" warning still
+fires if listeners ever leak beyond that.
+
+**Interview Q:** _What causes "MaxListenersExceededWarning" and how do you fix it?_ **A:**
+Usually a leak: something calls `.on()` per request or connection and never calls `.off()`,
+so listeners, and everything their closures reference, pile up forever. Fix the cleanup
+(remove listeners on `close`). Raise `setMaxListeners` only when many listeners are expected
+by design, and even then keep a cap.
 
 **Interview Q:** _Why an event bus instead of calling `sendEmail()` from the runner?_ **A:**
 Decoupling. The runner shouldn't know who cares about a state change. Adding SSE, Slack or
 webhooks means adding a listener, not editing and re-testing the runner. And a failure in
 one listener is contained instead of breaking the check pipeline.
+
+## 8. Streams: partial body reading, `Transform` + `pipeline` for CSV, backpressure
+
+**What:** streams process data piece by piece instead of loading it all into memory.
+
+- Readable streams can be read chunk by chunk and cancelled early.
+- A `Transform` reshapes data as it flows through.
+- `stream/promises` `pipeline()` connects stages, propagates errors and destroys every stage
+  on failure.
+- **Backpressure:** when the destination is slower than the source, `write()` returns
+  `false`. `pipeline` pauses the source until the destination emits `'drain'`.
+
+**Where:**
+
+- Partial body reading: `backend/src/modules/checks/checker.ts` → `readBodyPrefix` reads at
+  most 64 KB from `response.body`'s reader, then calls `cancel()`.
+- CSV export:
+  - `iterateChecks` (`checks.repository.ts`) is an async generator that pulls 1,000 rows at a
+    time.
+  - `Readable.from()` turns it into a stream.
+  - `toCsvTransform` (`backend/src/lib/csv.ts`) turns row objects into CSV text.
+  - `pipeline(rows, toCsv, res)` in `monitors.controller.ts` → `exportCsv`.
+- Reading piped stdin with `for await`: `backend/scripts/create-admin.ts`.
+
+**Interview Q:** _How would you export 10 million rows as CSV without running out of memory?_
+**A:** Never build the whole file. Read in batches (keyset pagination or a DB cursor) from an
+async generator, wrap it in `Readable.from`, transform rows to CSV lines, and `pipeline` into
+the HTTP response. Backpressure makes a slow client slow down the reads, so memory stays at
+about one batch. `pipeline` also cleans up if the client disconnects halfway.
 
 ## 9. Networking: `node:dns`, `node:net` IP checks, `node:tls`
 
@@ -305,6 +348,27 @@ unknown emails, which leaks who has an account through timing. It also ties the 
 latency and availability to the mail server's. The send runs in the background, and its
 failure is logged rather than thrown.
 
+## 18. SSE real-time updates and ticket-based auth
+
+**What:** Server-Sent Events are one long HTTP response with
+`Content-Type: text/event-stream`. The server writes `event: name\ndata: json\n\n` blocks as
+things happen. The browser's `EventSource` parses them and reconnects automatically.
+Comment lines (`: heartbeat`) keep idle connections alive through proxies.
+
+**Where:** `backend/src/modules/stream/`:
+
+- `tickets.ts`: `issueTicket` / `consumeTicket`, a `Map` with a 60-second TTL and single
+  use.
+- `stream.routes.ts`: `POST /ticket`, `GET /`.
+- `stream.service.ts` → `openStream`: headers, `flushHeaders`, per-user filtering, a 25-second
+  heartbeat interval, and cleanup on `req.on('close')`. `closeAllStreams` runs during
+  shutdown.
+
+**Interview Q:** _`EventSource` can't set headers. How do you authenticate it?_ **A:** Use a
+same-origin cookie, or exchange the access token for a short-lived, single-use ticket and
+pass that in the query string. Never put the long-lived token itself in a URL: URLs end up in
+logs and browser history.
+
 ## 19. Structured logging with request ids and redaction; health vs readiness
 
 **What:** Pino writes JSON log lines. pino-http gives each request a child logger stamped
@@ -335,4 +399,4 @@ compile time.
 
 ---
 
-_Sections 8, 18, 20 and 21 are added as those features are built._
+_Sections 20 and 21 are added as those features are built._

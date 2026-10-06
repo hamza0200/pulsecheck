@@ -1,3 +1,13 @@
+/**
+ * Forgot / reset password flow (integration, test DB, mailer mocked).
+ * - Forgot-password gives the same response for known and unknown emails (no enumeration)
+ * - Only existing users get an email; only the token's SHA-256 hash is stored; 30-minute expiry
+ * - Disabled users get no email
+ * - Requesting a new link invalidates older unused links
+ * - An SMTP failure still returns 200
+ * - Reset sets the new password, works only once, and revokes existing sessions
+ * - Expired, unknown and malformed tokens are rejected
+ */
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';

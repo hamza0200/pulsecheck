@@ -6,6 +6,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { accountRouter } from './modules/account/account.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { monitorsRouter } from './modules/monitors/monitors.routes.js';
+import { streamRouter } from './modules/stream/stream.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 
 /**
@@ -32,6 +33,7 @@ export function createApp() {
   app.use('/api/auth', authRouter);
   app.use('/api/account', accountRouter);
   app.use('/api/monitors', monitorsRouter);
+  app.use('/api/stream', streamRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

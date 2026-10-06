@@ -1,3 +1,11 @@
+/**
+ * Health endpoints and app-wide plumbing (integration, Supertest + test DB).
+ * - GET /health returns ok and an X-Request-Id header
+ * - A valid incoming X-Request-Id is echoed back
+ * - GET /ready runs SELECT 1 against the database
+ * - Unknown routes return the standard { error: { code, message } } shape
+ * - Malformed JSON bodies return 400 INVALID_BODY
+ */
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';

@@ -1,3 +1,4 @@
+import { pipeline } from 'node:stream/promises';
 import type { RequestHandler } from 'express';
 import { currentUser } from '../../middleware/requireAuth.js';
 import type {
@@ -57,4 +58,25 @@ export const listIncidents: RequestHandler<
 
 export const checkNow: RequestHandler<MonitorIdParams> = async (req, res) => {
   res.json(await monitorsService.checkNow(currentUser(req).id, req.params.id));
+};
+
+export const exportCsv: RequestHandler<MonitorIdParams> = async (req, res) => {
+  const { filename, rows, toCsv } = await monitorsService.exportChecksCsv(
+    currentUser(req).id,
+    req.params.id,
+  );
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Cache-Control', 'no-store');
+  // [Node concept: streams] pipeline() wires rows -> CSV transform -> response with
+  // backpressure: when the client reads slowly, res.write() signals "full" and pipeline
+  // pauses the source until 'drain'. If any stage fails or the client disconnects, it
+  // destroys every stage, so the generator stops fetching batches.
+  try {
+    await pipeline(rows, toCsv, res);
+  } catch (err) {
+    // The client went away mid-download: nothing to report.
+    if ((err as NodeJS.ErrnoException).code === 'ERR_STREAM_PREMATURE_CLOSE') return;
+    throw err;
+  }
 };

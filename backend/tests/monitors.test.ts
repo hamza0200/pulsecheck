@@ -1,3 +1,16 @@
+/**
+ * Monitors API (integration, test DB; DNS faked so no network is needed).
+ * - CRUD: create with defaults + URL normalisation, list (own monitors + usage), update, pause, delete
+ * - Changing the URL resets status and resolves the open incident
+ * - Duplicate URL per user returns 409; the same URL for another user is fine
+ * - Validation: 5-minute minimum interval, timeout bounds, unknown fields, bad URLs, protocols
+ * - SSRF: private targets refused on create and on update
+ * - Per-user limit (MAX_MONITORS_PER_USER), including under concurrent creates
+ * - IDOR: user A gets 404 on every endpoint for user B's monitor
+ * - Uptime 24h/7d/30d + average response computed with SQL aggregates
+ * - Cursor pagination of checks (newest first), `since` filter, invalid cursor
+ * - Incidents listed newest first
+ */
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';

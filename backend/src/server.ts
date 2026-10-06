@@ -4,8 +4,12 @@ import { env } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { mailer } from './lib/mailer.js';
 import { prisma } from './lib/prisma.js';
+import { registerAlertListeners } from './modules/alerts/alerts.service.js';
 import { waitForCurrentRun } from './modules/checks/runner.js';
+import { closeAllStreams } from './modules/stream/stream.service.js';
 import { startScheduler, stopScheduler } from './modules/checks/scheduler.js';
+
+registerAlertListeners();
 
 const app = createApp();
 const server = createServer(app);
@@ -33,9 +37,12 @@ async function shutdown(signal: string) {
   forceExit.unref();
 
   stopScheduler();
-  // Stop accepting new connections; resolves when in-flight requests finish.
-  await new Promise<void>((resolve) => server.close(() => resolve()));
+  // Stop accepting new connections. close() resolves once every open connection has
+  // ended, so end the long-lived SSE streams and idle keep-alive sockets straight away.
+  const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+  closeAllStreams();
   server.closeIdleConnections();
+  await closed;
   // Let a check run in progress finish its writes (capped), so no check is half-recorded.
   await waitForCurrentRun(10_000);
   mailer.close();

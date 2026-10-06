@@ -1,3 +1,9 @@
+/**
+ * Monitor state machine, the pure nextState function (unit).
+ * - UP -> 1 failure stays UP -> 2 failures DOWN ('down') -> success UP ('recovered')
+ * - A single blip between successes never changes the status
+ * - UNKNOWN -> UP on success (no recovery event), -> DOWN after 2 failures
+ */
 import { describe, expect, it } from 'vitest';
 import { type MonitorState, nextState } from '../src/modules/checks/state-machine.js';
 

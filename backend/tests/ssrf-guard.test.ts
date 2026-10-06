@@ -1,3 +1,14 @@
+/**
+ * SSRF guard (unit; DNS is faked by helpers/dns.ts).
+ * - isPrivateAddress blocks loopback, private, link-local, reserved and IPv4-mapped IPv6
+ *   addresses, and allows public ones
+ * - assertPublicUrl blocks 127.0.0.1, 10.x, 169.254.169.254 and ::1 literals
+ * - Blocks hostnames that resolve to private IPs, including when ANY of several addresses is private
+ * - Allows public IPs and hostnames that resolve to them
+ * - Only http(s), only ports 80/443, no user:pass@ in the URL
+ * - Unresolvable hosts and garbage input are rejected
+ * - ALLOW_PRIVATE_TARGETS (allowPrivate) lifts the address check
+ */
 import { describe, expect, it, vi } from 'vitest';
 import { SsrfError, assertPublicUrl, isPrivateAddress } from '../src/lib/ssrf-guard.js';
 

@@ -1,3 +1,14 @@
+/**
+ * HTTP checker, performCheck + readBodyPrefix (unit; fetch and DNS are mocked).
+ * - 200 is up; sends GET with redirect: 'manual', the PulseCheck User-Agent and an AbortSignal
+ * - 301 -> 200 follows the redirect and is up
+ * - 500 is down and not retried; 404 is down; 304 without Location is up
+ * - A timeout is retried once, then recorded as down
+ * - A network error followed by success counts as up; network errors are described by code
+ * - SSRF: a private target is blocked before any request; a redirect to a private IP is blocked
+ * - Gives up after 5 redirects
+ * - Reads at most 64 KB of the body, then cancels the stream
+ */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   MAX_BODY_BYTES,

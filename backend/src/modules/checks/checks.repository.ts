@@ -40,6 +40,41 @@ export const checksRepository = {
   },
 };
 
+export type CheckRow = Awaited<ReturnType<typeof checksRepository.listPage>>[number];
+
+/**
+ * Yields every check of a monitor, oldest first, fetching `batchSize` rows per query.
+ *
+ * [Node concept: streams] An async generator is a pull-based source: the next batch is only
+ * fetched when the consumer asks for more. Wrapped in Readable.from() and piped into a
+ * response, a slow client automatically slows down the database reads (backpressure),
+ * and memory holds at most one batch however many rows there are.
+ */
+export async function* iterateChecks(monitorId: string, batchSize = 1000) {
+  let after: { checkedAt: Date; id: string } | undefined;
+  for (;;) {
+    const batch = await prisma.check.findMany({
+      where: {
+        monitorId,
+        ...(after
+          ? {
+              OR: [
+                { checkedAt: { gt: after.checkedAt } },
+                { checkedAt: after.checkedAt, id: { gt: after.id } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ checkedAt: 'asc' }, { id: 'asc' }],
+      take: batchSize,
+      select: checkSelect,
+    });
+    yield* batch;
+    if (batch.length < batchSize) return;
+    after = batch[batch.length - 1];
+  }
+}
+
 export interface DueMonitor {
   id: string;
   userId: string;

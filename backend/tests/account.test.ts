@@ -1,3 +1,13 @@
+/**
+ * Account API: settings, change password, delete account (integration, test DB).
+ * - Requires authentication
+ * - GET/PATCH /api/account reads and updates alertsEnabled
+ * - Unknown fields (e.g. role) are rejected, so users can't promote themselves
+ * - Change password needs the correct current password
+ * - Change password revokes other sessions but keeps the current one
+ * - Delete account needs the password and cascades to monitors and tokens
+ * - The last remaining admin can't delete their account
+ */
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';

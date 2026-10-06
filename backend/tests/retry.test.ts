@@ -1,3 +1,12 @@
+/**
+ * retry + backoffDelay (unit).
+ * - Returns the first success without retrying
+ * - Retries up to `retries` times and then succeeds
+ * - Gives up after `retries` and rethrows the last error
+ * - Does not retry errors that shouldRetry rejects
+ * - Reports each retry with its delay (onRetry)
+ * - Backoff grows exponentially, is capped, and is randomised (full jitter)
+ */
 import { describe, expect, it, vi } from 'vitest';
 import { backoffDelay, retry } from '../src/lib/retry.js';
 

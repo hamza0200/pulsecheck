@@ -1,3 +1,14 @@
+/**
+ * Check runner, scheduler pipeline and check-now (integration, test DB; fetch, DNS and TLS mocked).
+ * - Full state machine through the runner: UP -> 1 failure stays UP -> 2 failures DOWN + incident
+ *   -> success resolves it, with the right events emitted
+ * - SSL expiry is checked at most once a day and warns when fewer than 14 days remain
+ * - runChecks only checks due monitors (skips paused, fresh and disabled-owner monitors) and stores
+ *   a run summary
+ * - Overlap guard: a second trigger during a run returns null
+ * - One failing site never stops the others
+ * - POST /check-now: returns the result, 404 for another user's monitor, rate limited to once per minute
+ */
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';

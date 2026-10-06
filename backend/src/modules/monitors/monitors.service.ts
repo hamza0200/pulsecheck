@@ -3,7 +3,9 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { AppError, badRequest, conflict, notFound } from '../../lib/errors.js';
 import { prisma } from '../../lib/prisma.js';
 import { SsrfError, assertPublicUrl } from '../../lib/ssrf-guard.js';
-import { checksRepository } from '../checks/checks.repository.js';
+import { Readable } from 'node:stream';
+import { toCsvTransform } from '../../lib/csv.js';
+import { type CheckRow, checksRepository, iterateChecks } from '../checks/checks.repository.js';
 import { checkMonitorById, isMonitorInFlight } from '../checks/runner.js';
 import { incidentsRepository } from '../incidents/incidents.repository.js';
 import { incidentsService } from '../incidents/incidents.service.js';
@@ -182,6 +184,26 @@ export const monitorsService = {
       },
       monitor: await monitorsService.get(userId, id),
     };
+  },
+
+  /**
+   * Builds a CSV stream of the monitor's full check history. The service returns a stream
+   * (not a string), so the controller can pipe it into the response without the whole
+   * file ever being in memory.
+   */
+  async exportChecksCsv(userId: string, id: string) {
+    const monitor = await requireOwned(userId, id);
+    const rows = Readable.from(iterateChecks(id));
+    const toCsv = toCsvTransform<CheckRow>([
+      { header: 'checked_at', value: (c) => c.checkedAt },
+      { header: 'is_up', value: (c) => c.isUp },
+      { header: 'status_code', value: (c) => c.statusCode },
+      { header: 'response_time_ms', value: (c) => c.responseTimeMs },
+      { header: 'error', value: (c) => c.error },
+    ]);
+    const safeName = monitor.name.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    const date = new Date().toISOString().slice(0, 10);
+    return { filename: `${safeName || 'monitor'}-checks-${date}.csv`, rows, toCsv };
   },
 
   async listIncidents(userId: string, id: string, limit: number) {

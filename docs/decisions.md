@@ -150,3 +150,40 @@ Short records: what we chose, what else we considered, why, and what would chang
   per monitor with `UPDATE … SET last_checked_at = now() WHERE … RETURNING` combined with
   `FOR UPDATE SKIP LOCKED`, which also lets instances share the load instead of electing one
   leader.
+
+## Server-Sent Events instead of WebSockets or polling
+
+- **Decision:** live dashboard updates go over SSE (`GET /api/stream`, `text/event-stream`),
+  read in the browser with the native `EventSource`.
+- **Alternatives:** WebSockets (bidirectional, needs a protocol upgrade and usually a
+  library like `ws` or Socket.IO); polling `GET /api/monitors` every N seconds; long
+  polling.
+- **Why:** updates only flow server → browser. SSE is plain HTTP, so it works through the
+  Vite proxy and ordinary reverse proxies, needs no library on either side, and
+  `EventSource` reconnects automatically. Polling would mostly fetch "nothing changed" and
+  delay updates by up to the poll interval.
+- **At scale:** each open stream holds one connection and some listeners in one process.
+  With several instances, a check run on instance A must reach users connected to instance
+  B. Publish events through Redis pub/sub or Postgres `LISTEN/NOTIFY` instead of the
+  in-process `EventEmitter`. HTTP/2 also removes the browser's ~6-connections-per-host limit
+  for SSE on HTTP/1.1.
+
+## SSE authentication with one-time stream tickets
+
+- **Decision:** the client calls `POST /api/stream/ticket` with its access token and gets a
+  random 256-bit ticket, valid for 60 seconds and single-use, stored in memory with the
+  user id. It then opens `GET /api/stream?ticket=…`. The server consumes the ticket, checks
+  the user is still active, and streams only that user's events.
+- **Alternatives:**
+  - **Access token in the query string:** simplest, but the 15-minute token ends up in
+    server and proxy logs, browser history, and the `Referer` header.
+  - **Cookie auth:** `EventSource` sends cookies on same-origin requests, so this would work
+    with the Vite proxy. But our auth cookie is the refresh token, scoped to `/api/auth` on
+    purpose. Adding a second, session-style cookie would bring back cookie sessions and the
+    need for CSRF thinking.
+  - **Polling or WebSockets:** see the previous record. WebSockets have the same
+    "no custom header from the browser API" problem.
+- **Why:** the ticket is worthless once used or after 60 seconds, so leaking it through a
+  log line is harmless. It costs one extra request per connection.
+- **At scale:** tickets in a process-local `Map` only work with one instance (or sticky
+  sessions). Move them to Redis with a 60-second TTL and use `GETDEL` to consume them.

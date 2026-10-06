@@ -1,3 +1,11 @@
+/**
+ * runWithLimit (unit).
+ * - Never runs more than `limit` tasks at once
+ * - Preserves input order even when tasks finish out of order
+ * - Records rejections without stopping other tasks (allSettled semantics)
+ * - Handles synchronous throws, empty input, and a limit larger than the task count
+ * - Rejects an invalid limit
+ */
 import { setTimeout as sleep } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { runWithLimit } from '../src/lib/concurrency.js';

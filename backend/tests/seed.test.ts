@@ -1,3 +1,8 @@
+/**
+ * db:seed script (test DB).
+ * - Fails with a message pointing to `npm run admin:create` when no admin exists
+ * - Attaches the 10 sample sites to the FIRST admin and is idempotent
+ */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '../src/lib/prisma.js';
 import { NoAdminError, SEED_URLS, seedDemoMonitors } from '../prisma/seed.js';

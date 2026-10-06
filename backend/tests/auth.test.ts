@@ -1,3 +1,17 @@
+/**
+ * Auth API: signup, login, refresh, logout, me (integration, Supertest + test DB).
+ * - Signup: creates a USER, hashes the password, sets an httpOnly/SameSite=Lax refresh cookie
+ * - Signup can never create an admin, even if the body sends role: ADMIN
+ * - Signup validation: short/common passwords and bad emails
+ * - Duplicate email (any letter case) returns 409 EMAIL_TAKEN
+ * - Login works; wrong password and unknown email return the identical 401
+ * - Disabled user gets 403 ACCOUNT_DISABLED
+ * - Login rate limit: the 11th attempt in 15 minutes returns 429
+ * - Refresh rotates the token; reusing a rotated token revokes the whole family
+ * - Refresh rejects missing/garbage cookies and disabled users
+ * - Logout revokes the token and clears the cookie
+ * - GET /me: works with a token, 401 without, 403 once the user is disabled
+ */
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';

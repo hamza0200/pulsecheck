@@ -419,3 +419,77 @@ events. Rate limit: once per minute per user and monitor.
 - Typical `error` values: `HTTP 503`, `Timed out after 10000 ms`, `ENOTFOUND: …`,
   `ECONNREFUSED: …`, `CERT_HAS_EXPIRED: certificate has expired`,
   `Blocked redirect to http://10.0.0.1/: …`, `Too many redirects (more than 5)`.
+
+### `GET /api/monitors/:id/export.csv`
+
+Streams the monitor's full check history as CSV, oldest first. Rows are read from the
+database in batches of 1,000 and streamed straight to the client, so memory stays flat
+however long the history is.
+
+```
+200
+Content-Type: text/csv; charset=utf-8
+Content-Disposition: attachment; filename="example.com-checks-2026-10-06.csv"
+
+checked_at,is_up,status_code,response_time_ms,error
+2026-10-06T13:06:07.438Z,false,,,CERT_HAS_EXPIRED: certificate has expired
+2026-10-06T13:16:07.102Z,true,200,182,
+```
+
+- Lines end with CRLF. Fields with commas, quotes or newlines are quoted (RFC 4180).
+- Text starting with `=`, `+`, `-` or `@` is prefixed with `'` so spreadsheets don't run it
+  as a formula.
+- `404 MONITOR_NOT_FOUND` if the monitor isn't yours.
+- Because the access token goes in the `Authorization` header, the web app downloads it with
+  `fetch` and saves the blob. A plain link can't send the header.
+
+---
+
+## Live updates (Server-Sent Events)
+
+`EventSource` can't send an `Authorization` header, so opening the stream takes two steps.
+
+### `POST /api/stream/ticket`
+
+Auth: user.
+
+```json
+201 { "ticket": "x7Q2…43 random characters", "expiresInSeconds": 60 }
+```
+
+The ticket is random, single-use, valid for 60 seconds, and held in server memory.
+
+### `GET /api/stream?ticket=<ticket>`
+
+No other auth. Consumes the ticket and keeps the response open as a `text/event-stream`.
+
+| Status | Code                                                                   |
+| ------ | ---------------------------------------------------------------------- |
+| 200    | Stream opened                                                          |
+| 400    | `VALIDATION_ERROR`: no `ticket` query parameter                        |
+| 401    | `INVALID_TICKET`: unknown, expired or already used (get a new ticket)  |
+| 503    | `TOO_MANY_STREAMS`: more than 10 streams for this user, or 200 overall |
+
+You only receive events for **your own** monitors:
+
+```
+retry: 5000
+
+event: ready
+data: {"connectedAt":"2026-10-06T13:06:04.258Z"}
+
+event: monitor.checked
+data: {"monitorId":"…","name":"example.com","url":"https://example.com","status":"UP","checkedAt":"…","isUp":true,"statusCode":200,"responseTimeMs":182,"error":null,"consecutiveFailures":0}
+
+event: monitor.down
+data: {"monitorId":"…","name":"example.com","url":"https://example.com","cause":"HTTP 503","startedAt":"…"}
+
+event: monitor.recovered
+data: {"monitorId":"…","name":"example.com","url":"https://example.com","downSince":"…","recoveredAt":"…"}
+
+: heartbeat
+```
+
+- A `: heartbeat` comment every 25 seconds keeps proxies from closing the idle connection.
+- If the connection drops, get a **new** ticket before reconnecting: tickets are single-use,
+  so `EventSource`'s built-in automatic reconnect would get a 401.

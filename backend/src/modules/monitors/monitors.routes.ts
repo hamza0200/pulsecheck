@@ -33,6 +33,7 @@ monitorsRouter.patch(
   controller.update,
 );
 monitorsRouter.delete('/:id', withId, controller.remove);
+monitorsRouter.get('/:id/export.csv', withId, controller.exportCsv);
 monitorsRouter.post('/:id/check-now', withId, checkNowLimiter, controller.checkNow);
 monitorsRouter.get(
   '/:id/checks',

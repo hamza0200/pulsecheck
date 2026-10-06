@@ -1,3 +1,9 @@
+/**
+ * admin:create CLI, run as a real child process in non-interactive mode (test DB).
+ * - Creates a new ADMIN with a bcrypt-hashed password and never prints the password
+ * - Promotes an existing user, keeping their password when none is piped in
+ * - Rejects a weak password using the same rules as signup
+ */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { beforeEach, describe, expect, it } from 'vitest';
