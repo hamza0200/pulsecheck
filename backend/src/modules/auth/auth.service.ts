@@ -105,7 +105,12 @@ export const authService = {
     if (!record || !safeEqual(record.tokenHash, hashToken(rawToken))) throw invalidRefreshToken();
 
     if (record.revokedAt) {
-      await refreshTokenRepository.revokeFamily(record.familyId);
+      // If the family still had a live token, someone rotated this token and someone else
+      // is now replaying the old copy: likely theft, so kill the family. If nothing was
+      // live, the token was revoked on purpose (logout, password reset, account disabled)
+      // and this is just a stale cookie.
+      const { count } = await refreshTokenRepository.revokeFamily(record.familyId);
+      if (count === 0) throw invalidRefreshToken();
       logger.warn(
         { userId: record.userId, familyId: record.familyId },
         'Refresh token reuse detected; revoked token family',

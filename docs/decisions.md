@@ -48,6 +48,9 @@ Short records: what we chose, what else we considered, why, and what would chang
   disabling or demoting a user takes effect immediately rather than when the access token
   expires. That gives up some of JWT's statelessness for correctness. Without it we would
   need a revocation list or very short token lifetimes.
+- **Reuse detection is precise:** replaying a revoked token kills the family and is logged
+  as theft only if the family still had a live token. Tokens revoked by logout, password
+  reset or an admin disabling the user simply get `401 INVALID_REFRESH_TOKEN`.
 - **Known edge case:** two browser tabs refreshing in the same instant would look like reuse.
   The frontend shares one in-flight refresh call per tab, which covers React StrictMode's
   double effects. A short "grace window" for just-rotated tokens would cover multiple tabs at

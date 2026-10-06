@@ -267,6 +267,16 @@ up again, someone has a copy, so the whole family is revoked.
 **Where:** `backend/src/modules/auth/auth.service.ts` (`refresh`, `issueSession`),
 `backend/src/lib/tokens.ts`, `backend/src/middleware/requireAuth.ts`.
 
+**Roles:** `requireAdmin` (`backend/src/middleware/requireAdmin.ts`) runs after
+`requireAuth` and reads the role from the database row `requireAuth` just loaded, never from
+the JWT claim. Disabling a user (`adminService.setDisabled`) revokes their refresh tokens in a
+transaction and emits `user.disabled`, which closes their SSE streams.
+
+**Reuse vs revoked on purpose:** in `authService.refresh`, a revoked token is treated as theft
+only if its family still had a live token, meaning someone holds the newer rotated token. A
+token revoked by logout, password reset or an admin is just reported as invalid, so those
+don't raise false alarms.
+
 **Interview Q:** _How do you log out a JWT?_ **A:** You can't revoke a stateless access
 token, so keep it short-lived (15 minutes) and revoke the refresh token server-side.
 PulseCheck also looks up the user on each request, so disabling an account takes effect

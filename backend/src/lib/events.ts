@@ -33,12 +33,17 @@ export interface MonitorSslExpiringEvent extends MonitorRef {
   daysLeft: number;
 }
 
+export interface UserDisabledEvent {
+  userId: string;
+}
+
 /** Event name -> listener argument tuple. */
 export interface AppEvents {
   'monitor.checked': [MonitorCheckedEvent];
   'monitor.down': [MonitorDownEvent];
   'monitor.recovered': [MonitorRecoveredEvent];
   'monitor.sslExpiring': [MonitorSslExpiringEvent];
+  'user.disabled': [UserDisabledEvent];
   error: [unknown];
 }
 

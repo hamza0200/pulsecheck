@@ -8,6 +8,7 @@
  * - Disabled user gets 403 ACCOUNT_DISABLED
  * - Login rate limit: the 11th attempt in 15 minutes returns 429
  * - Refresh rotates the token; reusing a rotated token revokes the whole family
+ * - A token revoked on purpose (logout) is reported as invalid, not as reuse
  * - Refresh rejects missing/garbage cookies and disabled users
  * - Logout revokes the token and clears the cookie
  * - GET /me: works with a token, 401 without, 403 once the user is disabled
@@ -174,6 +175,14 @@ describe('POST /api/auth/refresh', () => {
 
     const active = await prisma.refreshToken.count({ where: { userId: user.id, revokedAt: null } });
     expect(active).toBe(0);
+  });
+
+  it('a token revoked on purpose (logout) is just invalid, not "reused"', async () => {
+    const { cookie } = await signupUser(app);
+    await request(app).post('/api/auth/logout').set('Cookie', cookie);
+    const res = await request(app).post('/api/auth/refresh').set('Cookie', cookie);
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('INVALID_REFRESH_TOKEN');
   });
 
   it('rejects a missing or garbage cookie', async () => {

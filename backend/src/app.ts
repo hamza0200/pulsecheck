@@ -3,6 +3,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { requestLogger } from './middleware/requestId.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { adminRouter } from './modules/admin/admin.routes.js';
 import { accountRouter } from './modules/account/account.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { monitorsRouter } from './modules/monitors/monitors.routes.js';
@@ -34,6 +35,7 @@ export function createApp() {
   app.use('/api/account', accountRouter);
   app.use('/api/monitors', monitorsRouter);
   app.use('/api/stream', streamRouter);
+  app.use('/api/admin', adminRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

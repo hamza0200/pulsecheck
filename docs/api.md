@@ -493,3 +493,83 @@ data: {"monitorId":"…","name":"example.com","url":"https://example.com","downS
 - A `: heartbeat` comment every 25 seconds keeps proxies from closing the idle connection.
 - If the connection drops, get a **new** ticket before reconnecting: tickets are single-use,
   so `EventSource`'s built-in automatic reconnect would get a 401.
+
+---
+
+## Admin
+
+Every admin endpoint runs `requireAuth` and then `requireAdmin`. The role is read from the
+database on each request, not from the token, so a demoted admin loses access immediately.
+No admin endpoint ever returns password hashes or tokens.
+
+| Status | Code                                       |
+| ------ | ------------------------------------------ |
+| 401    | `UNAUTHORIZED`: no or invalid access token |
+| 403    | `ADMIN_ONLY`: the caller isn't an admin    |
+
+### `GET /api/admin/stats`
+
+```json
+200 {
+  "users": { "total": 2, "admins": 1, "disabled": 0 },
+  "monitors": { "total": 10, "up": 9, "down": 0, "unknown": 1, "paused": 0 },
+  "checksLast24h": 10,
+  "lastRun": {
+    "checked": 10,
+    "up": 9,
+    "down": 1,
+    "errors": 0,
+    "durationMs": 8138,
+    "startedAt": "2026-10-06T14:28:35.230Z",
+    "finishedAt": "2026-10-06T14:28:43.367Z"
+  },
+  "schedulerEnabled": true
+}
+```
+
+- `lastRun` is `null` until the scheduler has completed a run since the process started (it
+  lives in memory).
+- `lastRun.down` counts failed checks in that run. `monitors.down` counts monitors currently
+  in the `DOWN` state, which needs 2 consecutive failures.
+
+### `GET /api/admin/users?cursor=&limit=&search=`
+
+Newest users first. `limit` 1–100 (default 20). `search` is a case-insensitive substring
+match on email. `cursor` is the previous page's `nextCursor`.
+
+```json
+200 {
+  "users": [
+    {
+      "id": "uuid",
+      "email": "ada@example.com",
+      "role": "USER",
+      "isDisabled": false,
+      "createdAt": "2026-10-06T14:28:31.000Z",
+      "monitorCount": 3
+    }
+  ],
+  "nextCursor": null
+}
+```
+
+### `PATCH /api/admin/users/:id`
+
+```json
+{ "isDisabled": true }
+```
+
+Disabling a user:
+
+- revokes all of their refresh tokens;
+- blocks their existing access tokens on the next request (`403 ACCOUNT_DISABLED`);
+- closes their open live-update streams;
+- pauses their monitors' checks (disabled owners are skipped).
+
+Re-enabling (`false`) lets them log in again.
+
+| Status | Body / code                                                                               |
+| ------ | ----------------------------------------------------------------------------------------- |
+| 200    | `{ "user": { …same shape as the users list… } }`                                          |
+| 400    | `CANNOT_DISABLE_SELF`, or `VALIDATION_ERROR` (unknown fields such as `role` are rejected) |
+| 404    | `USER_NOT_FOUND`                                                                          |

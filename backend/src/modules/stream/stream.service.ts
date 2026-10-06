@@ -97,6 +97,19 @@ export function openStream(userId: string, req: Request, res: Response): void {
   req.on('close', connection.close);
 }
 
+/** Ends every open stream of one user (e.g. when an admin disables the account). */
+export function closeStreamsForUser(userId: string): void {
+  for (const connection of [...connections]) {
+    if (connection.userId !== userId) continue;
+    connection.close();
+    connection.res.end();
+  }
+}
+
+// One module-level listener (not per connection): a disabled user's live dashboards stop
+// immediately instead of streaming until they reload.
+events.on('user.disabled', ({ userId }) => closeStreamsForUser(userId));
+
 /** For graceful shutdown: end every open stream so server.close() can finish. */
 export function closeAllStreams(): void {
   for (const connection of [...connections]) {
