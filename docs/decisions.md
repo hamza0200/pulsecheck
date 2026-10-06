@@ -67,3 +67,39 @@ Short records: what we chose, what else we considered, why, and what would chang
   part in. A CLI needs shell access to the server, which already implies full trust.
 - **At scale:** the same command runs once on the server after deployment (see
   [deployment.md](./deployment.md)). Larger systems would use SSO with role claims.
+
+## SSRF strategy: resolve and check every address, at every step
+
+- **Decision:** `lib/ssrf-guard.ts` only allows `http`/`https` on ports 80/443, rejects
+  credentials in URLs, resolves the hostname with `dns.lookup({ all: true })`, and refuses the
+  URL if **any** resolved address is loopback, private, link-local or reserved (checked with
+  `net.BlockList`, IPv4-mapped IPv6 unwrapped). It runs when a monitor is created or its URL
+  changes, again before every check (DNS can change after saving), and on every redirect hop
+  (the checker follows redirects manually). `ALLOW_PRIVATE_TARGETS=true` disables the address
+  check for local testing only; env validation refuses it in production.
+- **Alternatives:** validate only at save time (defeated by changing DNS later, or by
+  redirecting to `http://169.254.169.254`); a hostname denylist (defeated by any DNS name
+  pointing at a private IP); sending checks through an egress proxy that enforces the policy
+  at the network level.
+- **Why:** checking resolved addresses rather than strings covers decimal/hex IP tricks,
+  `localhost` aliases and attacker-controlled DNS. Re-checking at request time and per hop
+  closes the "save a good URL, then change the DNS or redirect" holes.
+- **Remaining gap (DNS rebinding):** `fetch` resolves the hostname again after our check, so
+  a malicious DNS server with a ~0 TTL could answer "public" to the guard and "private" to
+  the connection a few milliseconds later. The full fix is to connect to the exact IP we
+  validated: an undici `Agent` with a custom `connect.lookup` that returns the vetted
+  address (or the guard itself acting as the resolver). Another option is a network-level
+  egress firewall or proxy.
+- **At scale:** run checkers in an isolated network segment with an egress firewall that
+  blocks private ranges, as defence in depth on top of the application guard.
+
+## Per-user monitor limit enforced with a row lock
+
+- **Decision:** creating a monitor runs in a transaction that first takes
+  `SELECT … FROM users WHERE id = $1 FOR UPDATE`, then counts the user's monitors and inserts.
+- **Alternatives:** count then insert without a lock (two parallel requests can both see 19
+  and both insert); a `SERIALIZABLE` transaction with retries; a counter column with a
+  `CHECK` constraint.
+- **Why:** the lock makes concurrent creates by the same user run one after another, and
+  doesn't affect other users. A test fires three creates at once with 19 existing monitors
+  and expects exactly one to succeed.

@@ -5,6 +5,7 @@ import { requestLogger } from './middleware/requestId.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { accountRouter } from './modules/account/account.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
+import { monitorsRouter } from './modules/monitors/monitors.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 
 /**
@@ -30,6 +31,7 @@ export function createApp() {
   app.use(healthRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/account', accountRouter);
+  app.use('/api/monitors', monitorsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

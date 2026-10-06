@@ -43,6 +43,23 @@ server?_ **A:** `hashSync` blocks the event loop for the whole hash (~250ms at c
 every other request waits. `hash` hands the work to the libuv thread pool and resolves a
 promise, so the loop keeps serving requests. Use the async one on servers.
 
+## 9. Networking: `node:dns`, `node:net` IP checks, `node:tls`
+
+**What:** `dns.lookup` resolves a hostname through the operating system's resolver, the same
+path the HTTP client uses. `{ all: true }` returns every A/AAAA record. `net.isIP` tells IPv4
+from IPv6, and `net.BlockList` matches addresses against CIDR ranges natively.
+
+**Where:** `backend/src/lib/ssrf-guard.ts`: `isPrivateAddress` (BlockList with private,
+loopback, link-local and reserved ranges, unwrapping `::ffff:a.b.c.d`) and `assertPublicUrl`
+(protocol/port rules plus `dns.lookup` of all addresses).
+
+**Interview Q:** _What's the difference between `dns.lookup` and `dns.resolve4`?_ **A:**
+`lookup` calls `getaddrinfo` on libuv's thread pool, honours `/etc/hosts`, and matches what
+`http`/`fetch` will connect to. `resolve*` sends DNS queries over the network with c-ares,
+skipping `/etc/hosts`. For SSRF checks you want what the client will actually use, so
+`lookup`. Note that `lookup` uses the thread pool, so very many concurrent lookups can queue
+behind each other (default pool size 4).
+
 ## 10. crypto: `randomBytes`, SHA-256 hashing, `timingSafeEqual`
 
 **What:** `node:crypto` gives cryptographically secure randomness (`randomBytes`,
@@ -116,6 +133,38 @@ token, so keep it short-lived (15 minutes) and revoke the refresh token server-s
 PulseCheck also looks up the user on each request, so disabling an account takes effect
 immediately.
 
+## 15. Security: helmet, rate limiting, IDOR, SSRF, user enumeration
+
+**What:**
+
+- **helmet** sets defensive HTTP headers.
+- **Rate limits** slow brute force and abuse.
+- **IDOR** (insecure direct object reference) means changing an id in a URL to reach someone
+  else's data. It's prevented by scoping every query to the owner.
+- **SSRF** (server-side request forgery) means tricking the server into requesting internal
+  addresses on the attacker's behalf. The classic target is the cloud metadata endpoint
+  `169.254.169.254`, which can leak cloud credentials.
+- **User enumeration** means learning which emails have accounts from different responses
+  or timings.
+
+**Where:**
+
+- helmet: `backend/src/app.ts`.
+- Rate limits: `backend/src/lib/rateLimit.ts` plus the limiters in each `*.routes.ts`.
+- IDOR: `backend/src/modules/monitors/monitors.repository.ts`, where every query takes
+  `userId`, and the IDOR test in `backend/tests/monitors.test.ts`.
+- SSRF: `backend/src/lib/ssrf-guard.ts`, called from `monitorsService.create/update` and, from
+  milestone 5, the checker on every request and redirect hop.
+- Enumeration: `authService.login` (same 401 plus `burnPasswordCheck` for unknown emails) and
+  `passwordResetService.requestReset` (same 200 either way, email sent in the background).
+
+**Interview Q:** _A user can enter any URL and your server fetches it. What can go wrong?_
+**A:** SSRF. They can scan your internal network, hit admin panels on localhost, or read
+cloud metadata credentials. Resolve the hostname and refuse private and reserved addresses,
+re-check at request time because DNS can change, validate every redirect hop yourself
+(`redirect: 'manual'`), and ideally pin the connection to the vetted IP to stop DNS
+rebinding.
+
 ## 16. Database: Prisma, migrations, transactions, indexes, cascades
 
 **What:** `schema.prisma` declares the models; `prisma migrate dev` turns schema changes
@@ -124,6 +173,19 @@ into SQL migration files. `$transaction` runs several writes atomically.
 
 **Where:** `backend/prisma/schema.prisma` (indexes are explained in comments),
 `backend/prisma/migrations/`, and the transaction in `authService.refresh`.
+
+**Cursor pagination and SQL aggregation:** `checksRepository.listPage`
+(`backend/src/modules/checks/checks.repository.ts`) pages with
+`WHERE (checked_at, id) < (cursor)` instead of `OFFSET`. `monitorRepository.uptimeStats` and
+`uptime24h` compute uptime with `COUNT(*) FILTER (WHERE …)` in PostgreSQL rather than loading
+checks into memory. `latestChecks` uses `CROSS JOIN LATERAL … LIMIT 1` so each monitor's
+latest check is a single index lookup on `(monitor_id, checked_at DESC)`. The monitor-limit
+transaction takes a `FOR UPDATE` row lock (`monitorRepository.lockUser`).
+
+**Interview Q:** _Why cursor pagination instead of `LIMIT/OFFSET`?_ **A:** `OFFSET 10000`
+still reads and discards 10,000 rows, so deep pages get slower. Rows inserted while someone
+is paging also shift `OFFSET` pages, causing duplicates or gaps. A keyset cursor seeks
+straight to the position through the index, so every page costs the same.
 
 **Interview Q:** _Why do the refresh-token revoke and create happen in one transaction with
 a conditional update?_ **A:** Atomicity: a crash between the two must not leave the user
@@ -177,4 +239,4 @@ compile time.
 
 ---
 
-_Sections 2–9, 15, 18, 20 and 21 are added as those features are built._
+_Sections 2–8, 18, 20 and 21 are added as those features are built._

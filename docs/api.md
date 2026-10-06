@@ -222,3 +222,162 @@ Rate limit: 10 per 15 minutes per IP.
 | 204    | Deleted. Monitors, checks, incidents and tokens are removed by cascade; cookie cleared |
 | 400    | `INVALID_PASSWORD`                                                                     |
 | 409    | `LAST_ADMIN`: the only active admin can't delete their account                         |
+
+---
+
+## Monitors
+
+All endpoints need a user access token. Every `/api/monitors/:id…` query filters by both
+`id` and the caller's `userId`: another user's monitor returns `404 MONITOR_NOT_FOUND`, the
+same as a monitor that doesn't exist. `:id` must be a UUID (else `400 VALIDATION_ERROR`).
+
+### The monitor object
+
+```json
+{
+  "id": "0aec55c0-49af-4307-96f8-10d0846e9d73",
+  "name": "example.com",
+  "url": "https://example.com",
+  "intervalMinutes": 10,
+  "timeoutMs": 10000,
+  "isPaused": false,
+  "currentStatus": "UP",
+  "consecutiveFailures": 0,
+  "lastCheckedAt": "2026-10-06T09:10:00.000Z",
+  "sslExpiresAt": "2027-01-01T23:59:59.000Z",
+  "sslCheckedAt": "2026-10-06T09:10:01.000Z",
+  "createdAt": "2026-10-06T08:00:00.000Z",
+  "updatedAt": "2026-10-06T09:10:00.000Z"
+}
+```
+
+`currentStatus` is `UNKNOWN` (never checked), `UP` or `DOWN`. A monitor becomes `DOWN` only
+after 2 consecutive failed checks.
+
+### `GET /api/monitors`
+
+Your monitors with their latest check and 24h uptime (computed with a SQL aggregate), plus
+usage against the per-user limit.
+
+```json
+200 {
+  "monitors": [
+    {
+      "...": "monitor fields",
+      "lastCheck": {
+        "monitorId": "uuid",
+        "checkedAt": "2026-10-06T09:10:00.000Z",
+        "isUp": true,
+        "statusCode": 200,
+        "responseTimeMs": 182,
+        "error": null
+      },
+      "uptime24h": 99.31
+    }
+  ],
+  "usage": { "used": 10, "max": 20 }
+}
+```
+
+`lastCheck` and `uptime24h` are `null` until the first check.
+
+### `POST /api/monitors`
+
+```json
+{ "url": "https://example.com", "name": "Example", "intervalMinutes": 10, "timeoutMs": 10000 }
+```
+
+| Field             | Rules                                                                                        | Default                 |
+| ----------------- | -------------------------------------------------------------------------------------------- | ----------------------- |
+| `url`             | required; `http`/`https`; port 80/443 only; no `user:pass@`; must resolve to public IPs only | —                       |
+| `name`            | 1–100 characters                                                                             | hostname without `www.` |
+| `intervalMinutes` | integer 5–1440                                                                               | 10                      |
+| `timeoutMs`       | integer 1000–30000                                                                           | 10000                   |
+
+URLs are normalised (lowercase host, no `#fragment`, no trailing `/` on a bare domain), so
+`https://Example.com/` and `https://example.com` count as the same monitor.
+
+| Status | Body / code                                                                                                             |
+| ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| 201    | `{ "monitor": { … } }`                                                                                                  |
+| 400    | `VALIDATION_ERROR`, or an SSRF code with `details.fieldErrors.url`:                                                     |
+|        | `INVALID_URL`, `UNSUPPORTED_PROTOCOL`, `UNSUPPORTED_PORT`, `CREDENTIALS_IN_URL`, `UNRESOLVABLE_HOST`, `PRIVATE_ADDRESS` |
+| 409    | `MONITOR_EXISTS`: you already monitor this URL                                                                          |
+| 409    | `MONITOR_LIMIT_REACHED`: you have `MAX_MONITORS_PER_USER` monitors (default 20)                                         |
+
+### `GET /api/monitors/:id`
+
+The monitor, its latest check, and stats over the last 24 hours, 7 days and 30 days.
+
+```json
+200 {
+  "monitor": {
+    "...": "monitor fields",
+    "lastCheck": { "...": "as above" },
+    "stats": {
+      "uptime24h": 99.31,
+      "uptime7d": 99.8,
+      "uptime30d": 99.95,
+      "avgResponseMs24h": 210,
+      "checks24h": 144
+    }
+  }
+}
+```
+
+Uptime values are percentages rounded to 2 decimals, or `null` when there are no checks in
+that window. `avgResponseMs24h` averages successful checks only.
+
+### `PATCH /api/monitors/:id`
+
+Any subset of `name`, `url`, `intervalMinutes`, `timeoutMs`, `isPaused` (same rules as
+create; at least one field). Pause with `{ "isPaused": true }` and resume with `false`.
+Changing `url` re-runs the SSRF guard, resets the status to `UNKNOWN`, clears SSL data and
+closes any open incident. Returns `200 { "monitor": { … } }`; errors as for create, plus
+`404`.
+
+### `DELETE /api/monitors/:id`
+
+`204`. Checks and incidents are deleted with it (cascade). `404` if it isn't yours.
+
+### `GET /api/monitors/:id/checks?cursor=&limit=&since=`
+
+Check history, newest first, with keyset (cursor) pagination.
+
+| Query    | Rules                                                                      |
+| -------- | -------------------------------------------------------------------------- |
+| `limit`  | 1–500, default 50                                                          |
+| `cursor` | the `nextCursor` from the previous page (opaque)                           |
+| `since`  | optional ISO 8601 timestamp: only checks after it (used for the 24h chart) |
+
+```json
+200 {
+  "checks": [
+    {
+      "id": "uuid",
+      "checkedAt": "2026-10-06T09:10:00.000Z",
+      "isUp": false,
+      "statusCode": 503,
+      "responseTimeMs": 87,
+      "error": "HTTP 503"
+    }
+  ],
+  "nextCursor": "MjAyNi0xMC0wNlQwOToxMDowMC4wMDBafDZm..."
+}
+```
+
+`nextCursor` is `null` on the last page. A malformed cursor returns `400 INVALID_CURSOR`.
+
+### `GET /api/monitors/:id/incidents?limit=`
+
+Most recent incidents first. `limit` 1–100, default 20.
+
+```json
+200 {
+  "incidents": [
+    { "id": "uuid", "startedAt": "2026-10-06T09:00:00.000Z", "resolvedAt": null, "cause": "HTTP 503" }
+  ]
+}
+```
+
+`resolvedAt: null` means the incident is still open (the site is down).
