@@ -8,3 +8,127 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// Tables and columns use snake_case in SQL (so raw aggregate queries read naturally)
+// and camelCase in TypeScript.
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum MonitorStatus {
+  UNKNOWN
+  UP
+  DOWN
+}
+
+model User {
+  id            String   @id @default(uuid()) @db.Uuid
+  /// Always stored lowercase (normalised by the Zod schema).
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  role          Role     @default(USER)
+  isDisabled    Boolean  @default(false) @map("is_disabled")
+  alertsEnabled Boolean  @default(true) @map("alerts_enabled")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  monitors            Monitor[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+
+  @@index([createdAt])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  /// Every token issued from one login shares a family; reuse of a revoked token
+  /// revokes the whole family.
+  familyId  String    @map("family_id") @db.Uuid
+  /// SHA-256 of the token. The raw token only ever lives in the user's cookie.
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model Monitor {
+  id                  String        @id @default(uuid()) @db.Uuid
+  userId              String        @map("user_id") @db.Uuid
+  name                String
+  url                 String
+  intervalMinutes     Int           @default(10) @map("interval_minutes")
+  timeoutMs           Int           @default(10000) @map("timeout_ms")
+  isPaused            Boolean       @default(false) @map("is_paused")
+  currentStatus       MonitorStatus @default(UNKNOWN) @map("current_status")
+  consecutiveFailures Int           @default(0) @map("consecutive_failures")
+  lastCheckedAt       DateTime?     @map("last_checked_at")
+  sslExpiresAt        DateTime?     @map("ssl_expires_at")
+  sslCheckedAt        DateTime?     @map("ssl_checked_at")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checks    Check[]
+  incidents Incident[]
+
+  @@unique([userId, url])
+  // The runner's "due monitors" query filters on these.
+  @@index([isPaused, lastCheckedAt])
+  @@map("monitors")
+}
+
+model Check {
+  id             String   @id @default(uuid()) @db.Uuid
+  monitorId      String   @map("monitor_id") @db.Uuid
+  checkedAt      DateTime @default(now()) @map("checked_at")
+  isUp           Boolean  @map("is_up")
+  statusCode     Int?     @map("status_code")
+  responseTimeMs Int?     @map("response_time_ms")
+  error          String?
+
+  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  // Serves "latest checks for a monitor" (pagination, charts, uptime windows) as an
+  // index range scan instead of a sort.
+  @@index([monitorId, checkedAt(sort: Desc)])
+  // Serves the retention job and "checks in the last 24h" admin stat.
+  @@index([checkedAt])
+  @@map("checks")
+}
+
+model Incident {
+  id         String    @id @default(uuid()) @db.Uuid
+  monitorId  String    @map("monitor_id") @db.Uuid
+  startedAt  DateTime  @default(now()) @map("started_at")
+  resolvedAt DateTime? @map("resolved_at")
+  cause      String
+
+  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@index([monitorId, startedAt(sort: Desc)])
+  @@map("incidents")
+}
