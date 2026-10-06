@@ -8,8 +8,7 @@ Short records: what we chose, what else we considered, why, and what would chang
 
 - **Decision:** Express 5 with a small, explicit routes → controller → service → repository
   layout.
-- **Alternatives:** NestJS (opinionated, decorators, dependency injection, close to Laravel's
-  structure); Fastify (faster, schema-first, built-in logging).
+- **Alternatives:** NestJS (opinionated, decorators, dependency injection, modules); Fastify (faster, schema-first, built-in logging).
 - **Why:** Express is the most widely known Node framework, and its middleware model is the
   concept interviews probe. Express 5 finally forwards rejected promises from async handlers
   to the error handler, removing the old `asyncHandler` boilerplate. NestJS would hide the
@@ -37,8 +36,8 @@ Short records: what we chose, what else we considered, why, and what would chang
   `Bearer` header, plus a 7-day refresh token in an `httpOnly`, `SameSite=Lax` cookie. Refresh
   tokens are stored only as SHA-256 hashes, rotated on every use, and grouped into a
   **family** per login. Presenting an already-revoked token revokes the whole family.
-- **Alternatives:** classic server sessions (Laravel's default: a session id cookie plus a
-  session store); long-lived JWTs with no refresh; opaque random refresh tokens instead of
+- **Alternatives:** classic server sessions (a session id cookie plus a server-side session
+  store); long-lived JWTs with no refresh; opaque random refresh tokens instead of
   JWTs.
 - **Why:** stateless access tokens are the industry-standard pattern for SPAs and are a
   common interview topic. Rotation with reuse detection means a stolen refresh token is
@@ -112,8 +111,7 @@ Short records: what we chose, what else we considered, why, and what would chang
 - **Decision:** `scheduler.ts` calls `runChecks()` every 60 seconds with an `unref()`'d
   `setInterval` inside the API process. The runner works out which monitors are due from
   `last_checked_at` and each monitor's interval.
-- **Alternatives:** system cron or a platform cron hitting a protected endpoint (Laravel's
-  `schedule:run` model); a Redis-backed queue such as BullMQ with repeatable jobs and
+- **Alternatives:** system cron or a platform cron hitting a protected endpoint; a Redis-backed queue such as BullMQ with repeatable jobs and
   separate worker processes; Postgres-backed queues (pg-boss, graphile-worker).
 - **Why:** zero extra infrastructure for a local app, and it demonstrates timers,
   `unref()` and graceful shutdown. Because "due" is computed from the database, a restart

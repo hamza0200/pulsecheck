@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-// Zod schemas play the role of Laravel Form Requests: they validate and normalise input
-// before it reaches a controller. The frontend mirrors these rules for instant feedback.
+// Zod schemas validate and normalise input before it reaches a controller. The frontend
+// mirrors these rules for instant feedback.
 
 export const PASSWORD_MIN_LENGTH = 10;
 

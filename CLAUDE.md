@@ -6,7 +6,7 @@
 
 ## 1. Context and goals
 
-The developer building this is an experienced React/TypeScript and PHP/Laravel engineer who is **new to Node.js on the backend** and is preparing for a Senior Product Engineer (JavaScript & Node.js) interview. The project has two goals:
+The developer building this is an experienced React/TypeScript engineer who is **new to Node.js on the backend** and is preparing for a Senior Product Engineer (JavaScript & Node.js) interview. The project has two goals:
 
 1. **Learning:** exercise the core Node.js concepts in section 10 in real code the developer can explain in an interview.
 2. **Usefulness:** a complete multi-user app where people sign up, add their own website URLs, and see their own uptime dashboard.
@@ -17,7 +17,6 @@ Because of goal 1:
 
 - Prefer clear, idiomatic code over clever code.
 - Add short comments **only** where a Node.js concept is at work, tagged like `// [Node concept: event loop] ...`, so the developer can search for them.
-- Mention Laravel equivalents once in the docs, not in every file (e.g. "Zod schemas play the role of Laravel Form Requests").
 - Record design decisions with real alternatives in `docs/decisions.md`.
 
 ---
@@ -416,7 +415,7 @@ Create a short **`README.md`** at the root and a **`docs/`** folder. Docs are pa
 
 **`docs/api.md`** — every endpoint with method, auth, request body, response examples and error codes.
 
-**`docs/node-concepts.md`** — for each concept in section 10: what it is (2–4 sentences), where it lives in this codebase (file + function), and a likely interview question with a short answer. Start with a **PHP/Laravel → Node.js** mapping table.
+**`docs/node-concepts.md`** — for each concept in section 10: what it is (2–4 sentences), where it lives in this codebase (file + function), and a likely interview question with a short answer.
 
 **`docs/decisions.md`** — short records (decision, alternatives, why, what changes at scale). At minimum: Express vs NestJS/Fastify, Prisma vs Drizzle, in-process scheduler vs cron vs queue (BullMQ), SSE vs WebSockets vs polling, SSE ticket auth, JWT + refresh vs sessions, token storage in memory vs localStorage, 2-failure threshold, overlap guard and multi-instance locking, SSRF strategy, admin creation via CLI instead of env.
 

@@ -4,29 +4,6 @@ Each section covers what the concept is, where it lives in this codebase, and a 
 interview question with a short answer. In the code, search for `[Node concept:` to find
 the comments that point at these places.
 
-## PHP/Laravel → Node.js mapping
-
-| Laravel / PHP                                    | PulseCheck (Node.js)                                             |
-| ------------------------------------------------ | ---------------------------------------------------------------- |
-| PHP-FPM: one process per request, shared-nothing | One long-lived process; an event loop serves every request       |
-| `routes/api.php` + controllers                   | `modules/*/*.routes.ts` + `*.controller.ts`                      |
-| Form Requests (`rules()`)                        | Zod schemas + `middleware/validate.ts`                           |
-| Middleware (`auth`, `can:`)                      | Express middleware (`requireAuth`, `requireAdmin`)               |
-| `App\Exceptions\Handler`                         | `middleware/errorHandler.ts` (4-argument Express middleware)     |
-| Eloquent models + migrations                     | Prisma schema, generated client, `prisma migrate`                |
-| `DB::transaction()`                              | `prisma.$transaction(async (tx) => …)`                           |
-| `Hash::make()` / `Hash::check()`                 | `bcrypt.hash()` / `bcrypt.compare()` (async, on the thread pool) |
-| `config/*.php` + `.env`                          | `config/env.ts`: `process.loadEnvFile()` + Zod validation        |
-| Artisan commands                                 | `scripts/*.ts` run with `tsx` via `npm run …`                    |
-| `Log::info()` (Monolog)                          | Pino structured JSON logs with a request id per request          |
-| Events + Listeners                               | `EventEmitter` event bus + alert/SSE listeners                   |
-| Queues + scheduler (`schedule:run` via cron)     | In-process `setInterval` scheduler (see decisions.md)            |
-| Mail + Mailables, Mailhog                        | Nodemailer over SMTP, Mailpit                                    |
-| Sanctum / Passport                               | JWT access tokens + rotating refresh tokens                      |
-| `composer.json` scripts, PSR-4 autoloading       | `package.json` scripts, ES Modules with explicit `.js` imports   |
-
----
-
 ## 1. Event loop, and why blocking is bad
 
 **What:** Node runs JavaScript on a single thread. The event loop takes finished I/O
